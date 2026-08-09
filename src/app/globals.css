@@ -4,7 +4,9 @@
 
 /* v3 darkMode:["class"] equivalent - `dark:` matches when a `.dark`
    ancestor (or self) is present. <html class="dark"> is hardcoded in
-   src/app/layout.tsx; there is currently no light theme. */
+   src/app/layout.tsx today, but both a light `:root` and a dark `.dark`
+   block are defined below so a future theme toggle is a one-line change,
+   not a redesign. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* v3-era hand-ported replacement (see git history on tailwind.config.ts)
@@ -14,55 +16,100 @@
 @custom-variant data-open (&:where([data-state="open"], [data-panel-open], [data-open]:not([data-open="false"])));
 @custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));
 
+/* ---------------------------------------------------------------------
+   Design tokens - monochrome, ChatGPT/Claude-style surface. Every
+   channel is chroma 0 (pure grayscale) except the two semantic hues kept
+   for destructive/warning states. No cyan, no purple, no glow.
+
+   `paper`/`floating` in the assistant-ui Elements' surfaces.tsx render as
+   `bg-background dark:bg-popover` - so in dark mode PANELS use --popover
+   and the PAGE uses --background, which is why --popover sits one step
+   above true black rather than equal to it.
+   --------------------------------------------------------------------- */
 :root {
+  color-scheme: light;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.145 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.145 0 0);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: oklch(0.145 0 0);
+  --destructive: oklch(0.55 0.16 25);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.9 0 0);
+  --ring: oklch(0.6 0 0);
+  --radius: 0.75rem;
+
+  /* Project-native palette, referenced directly across ~29 page/layout
+     files as raw CSS vars and Tailwind utilities (bg-bg-app, text-accent-
+     cyan, etc). Retargeted onto the semantic tokens above instead of
+     literal hex, so every one of those files goes monochrome with zero
+     component edits. Phase 10 retires this indirection and renames the
+     call sites directly. */
+  --bg-app: var(--background);
+  --bg-surface-1: var(--popover);
+  --bg-surface-2: var(--muted);
+  --bg-surface-3: var(--accent);
+  --border-subtle: var(--border);
+  --border-glow: var(--border);
+  --accent-cyan: var(--foreground);
+  --accent-purple: var(--muted-foreground);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: var(--muted-foreground);
+}
+
+.dark {
   color-scheme: dark;
 
-  /* Standard shadcn/assistant-ui tokens. Whole color values (Tailwind v4
-     style) rather than v3's bare HSL triplets - every `hsl(var(--x))`
-     reference in component code is replaced by plain `var(--x)`.
-     Values unchanged from the v3 config; only the representation moved. */
-  --background: hsl(223.6 47.8% 4.5%);
-  --foreground: hsl(220.0 14.3% 95.9%);
-  --card: hsl(220.9 39.3% 11.0%);
-  --card-foreground: hsl(220.0 14.3% 95.9%);
-  --popover: hsl(220.9 39.3% 11.0%);
-  --popover-foreground: hsl(220.0 14.3% 95.9%);
-  --primary: hsl(183.5 100.0% 50.0%);
-  --primary-foreground: hsl(223.6 47.8% 4.5%);
-  --secondary: hsl(220.9 39.3% 11.0%);
-  --secondary-foreground: hsl(220.0 14.3% 95.9%);
-  --muted: hsl(224.2 48.7% 7.6%);
-  --muted-foreground: hsl(217.9 10.6% 64.9%);
-  --accent: hsl(215.0 27.9% 16.9%);
-  --accent-foreground: hsl(220.0 14.3% 95.9%);
-  --destructive: hsl(0.0 84.2% 60.2%);
-  --destructive-foreground: hsl(220.0 14.3% 95.9%);
-  --border: hsl(220 20% 18%);
-  --input: hsl(215.0 27.9% 16.9%);
-  --ring: hsl(183.5 100.0% 50.0%);
-  --radius: 0.9rem;
+  --background: oklch(0 0 0);
+  --foreground: oklch(0.965 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.965 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.965 0 0);
+  --primary: oklch(0.965 0 0);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.185 0 0);
+  --secondary-foreground: oklch(0.965 0 0);
+  --muted: oklch(0.185 0 0);
+  --muted-foreground: oklch(0.66 0 0);
+  --accent: oklch(0.21 0 0);
+  --accent-foreground: oklch(0.965 0 0);
+  --destructive: oklch(0.62 0.14 25);
+  --destructive-foreground: oklch(0.965 0 0);
+  --border: oklch(0.24 0 0);
+  --input: oklch(0.24 0 0);
+  --ring: oklch(0.55 0 0);
+  --radius: 0.75rem;
 
-  /* Project-native palette (pre-shadcn), referenced directly across ~29
-     page/layout files as both raw CSS vars and Tailwind utilities.
-     Values unchanged here - Phase 2 replaces these with a monochrome set. */
-  --bg-app: #060911;
-  --bg-surface-1: #0A0F1D;
-  --bg-surface-2: #111827;
-  --bg-surface-3: #1F2937;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(0, 240, 255, 0.25);
-  --accent-cyan: #00F0FF;
-  --accent-purple: #7C3AED;
-  --text-primary: #F3F4F6;
-  --text-secondary: #9CA3AF;
-  --text-muted: #6B7280;
+  --bg-app: var(--background);
+  --bg-surface-1: var(--popover);
+  --bg-surface-2: var(--muted);
+  --bg-surface-3: var(--accent);
+  --border-subtle: var(--border);
+  --border-glow: var(--border);
+  --accent-cyan: var(--foreground);
+  --accent-purple: var(--muted-foreground);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: var(--muted-foreground);
 }
 
 @theme inline {
-  /* shadcn/assistant-ui semantic tokens -> the :root values above.
-     `inline` keeps these referencing the runtime custom property (rather
-     than baking in a resolved value), which is what lets a future `.dark`
-     override block (Phase 2) actually take effect. */
+  /* shadcn/assistant-ui semantic tokens -> the :root/.dark values above.
+     `inline` keeps these referencing the runtime custom property, which
+     is what lets the `.dark` override block actually take effect. */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -91,11 +138,10 @@
      (bg-bg-app, bg-bg-surface-1/2/3, text-bg-app, bg/text/border-accent-cyan,
      bg/text/border-accent-purple, border-border-subtle, border-border-glow,
      bg/text/border-status-*, shadow-glow, shadow-purpleGlow). Deliberately
-     NOT adding shorter aliases (e.g. `--color-app`, `--color-surface-1`,
+     not adding shorter aliases (e.g. `--color-app`, `--color-surface-1`,
      `--color-glow`) that some page files reference as bare classes like
      `bg-app`/`border-glow` - those were already-undefined no-op utilities
-     under the v3 config and must stay that way for this migration to be
-     pixel-identical; Phase 2/10 is where the real cleanup happens. */
+     before this migration and stay that way; Phase 10 is the real cleanup. */
   --color-bg-app: var(--bg-app);
   --color-bg-surface-1: var(--bg-surface-1);
   --color-bg-surface-2: var(--bg-surface-2);
@@ -107,17 +153,21 @@
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
-  --color-status-success: #10B981;
-  --color-status-warning: #F59E0B;
-  --color-status-danger: #EF4444;
-  --color-status-working: #3B82F6;
-  --color-status-waiting: #8B5CF6;
 
-  --shadow-glow: 0 0 20px rgba(0, 240, 255, 0.15);
-  --shadow-purpleGlow: 0 0 20px rgba(124, 58, 237, 0.2);
+  /* Exactly two hues survive in the whole app: destructive/danger red and
+     warning amber. success/working/waiting carry meaning through weight
+     and opacity instead of color, the way ChatGPT/Claude do it. */
+  --color-status-success: var(--foreground);
+  --color-status-warning: oklch(0.72 0.12 75);
+  --color-status-danger: var(--destructive);
+  --color-status-working: var(--muted-foreground);
+  --color-status-waiting: var(--muted-foreground);
 
-  --font-sans: Inter, Outfit, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --shadow-glow: none;
+  --shadow-purpleGlow: none;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
 
   /* camelCase key preserved on purpose - the v3 config used
      `animation.pulseSlow`/`spinSlow`, which produced `animate-pulseSlow`/
@@ -130,7 +180,7 @@
 body {
   background-color: var(--bg-app);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: var(--font-sans);
   overflow-x: hidden;
 }
 
@@ -141,36 +191,38 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #060911;
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1F2937;
+  background: var(--border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00F0FF;
+  background: var(--muted-foreground);
 }
 
-/* Focus styles */
+/* Focus styles - neutral ring, not cyan */
 *:focus-visible {
-  outline: 2px solid #00F0FF;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
-/* Custom Glassmorphism */
+/* Flat panel surface - no glassmorphism, no backdrop-filter, no glow */
 .glass-panel {
-  background: rgba(10, 15, 29, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--popover);
+  border: 1px solid var(--border);
 }
 
 .glass-panel-interactive {
-  background: rgba(10, 15, 29, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease;
+}
+
+.glass-panel-interactive:hover {
+  border-color: var(--ring);
 }
 
 @layer utilities {
@@ -183,18 +235,12 @@ body {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
 
-.glass-panel-interactive:hover {
-  border-color: rgba(0, 240, 255, 0.4);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
-  transform: translateY(-1px);
-}
-
 /* Dead in both v3 and v4: no `animate-collapsible-down`/`-up` utility is
    registered (the v3 config never defined `theme.animation.collapsible-*`
    either), so `data-open:animate-collapsible-down` in the pulled
    assistant-ui components currently has no effect - these keyframes exist
-   but are unreferenced. Left as-is for this migration; Phase 3.3 addresses
-   the underlying Base UI/Radix collapsible-height gap for the new Elements. */
+   but are unreferenced. Left as-is; Phase 3.3 addresses the underlying
+   Base UI/Radix collapsible-height gap for the new Elements. */
 @keyframes collapsible-down {
   from {
     height: 0;
