@@ -27,7 +27,9 @@ async function workforceCall(authorization: string, path: string, workspaceId: s
   });
   const parsed = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(String(parsed?.detail ?? parsed?.error ?? `Agent Workforce rejected a step (status ${response.status}).`));
+    const reason = parsed?.detail ?? parsed?.error?.message ?? parsed?.error;
+    const message = typeof reason === "string" ? reason : reason ? JSON.stringify(reason) : `Agent Workforce rejected a step (status ${response.status}).`;
+    throw new Error(message);
   }
   return parsed;
 }
@@ -81,7 +83,16 @@ export async function POST(request: Request, { params }: { params: { workspaceId
     const assignment = await workforceCall(authorization, "assignments", params.workspaceId, {
       instance_id: instance.id,
       assigned_by: actor,
-      work_order: { task },
+      // Real work orders have a specific required shape (AgentWorkOrder
+      // schema: task_id/task_type/purpose/required_responsibilities/
+      // deliverable) - a bare free-text task string doesn't validate.
+      work_order: {
+        task_id: slug,
+        task_type: "development",
+        purpose: task,
+        required_responsibilities: ["Complete the assigned task"],
+        deliverable: { type: "web-page", description: task },
+      },
     });
 
     return NextResponse.json({
