@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   assistantGatewayBaseUrl,
+  assistantGatewayUrl,
   internalServiceHeaders,
   requireGatewayWorkspaceAccess,
 } from "@/lib/server/assistant-gateway";
@@ -9,9 +10,22 @@ const services = [
   { name: "Hermes Orchestrator", url: assistantGatewayBaseUrl, path: "/health/live" },
   { name: "JCode Runner", url: process.env.JCODE_RUNNER_URL ?? "http://127.0.0.1:8020", path: "/health/live" },
   { name: "Core Backend", url: process.env.CORE_BACKEND_URL ?? "http://127.0.0.1:8000", path: "/health/live" },
-  { name: "Agent Workforce", url: process.env.WORKFORCE_URL ?? "http://127.0.0.1:8030", path: "/health/live" },
-  { name: "Observability", url: process.env.OBSERVABILITY_URL ?? "http://127.0.0.1:8070", path: "/health/live" },
 ] as const;
+
+type GatewayServiceHealth = { live: boolean; ready: boolean; detail?: string };
+
+type ServiceTile = { name: string; state: "online" | "degraded" | "offline"; detail: string; live?: string };
+
+// Agent Workforce and Observability no longer get fetched directly from this
+// public, internet-facing route: both are reached only through the assistant
+// gateway's authenticated `/v1/status`, which already holds the internal
+// service credentials needed to reach them. See gateway `app/main.py`.
+function mapGatewayStatus(name: string, health: GatewayServiceHealth | undefined): ServiceTile {
+  if (!health) return { name, state: "offline", detail: "Service status unavailable" };
+  if (health.live && health.ready) return { name, state: "online", detail: health.detail ?? "ready" };
+  if (health.live) return { name, state: "degraded", detail: health.detail ?? "dependencies unavailable" };
+  return { name, state: "offline", detail: health.detail ?? "Service is not reachable" };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -21,23 +35,39 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: access.detail }, { status: access.status });
   }
 
-  const results = await Promise.all(services.map(async (service) => {
+  const results: ServiceTile[] = await Promise.all(services.map(async (service) => {
     try {
-      const serviceHeaders = service.name === "Agent Workforce"
-        ? internalServiceHeaders("veyaan-assistant-gateway", process.env.WORKFORCE_SERVICE_SECRET)
-        : service.name === "JCode Runner"
-          ? internalServiceHeaders("veyaan-assistant-gateway", process.env.RUNNER_SERVICE_SECRET)
-          : {};
+      const serviceHeaders = service.name === "JCode Runner"
+        ? internalServiceHeaders("veyaan-assistant-gateway", process.env.RUNNER_SERVICE_SECRET)
+        : {};
       const liveResponse = await fetch(`${service.url}${service.path}`, { headers: serviceHeaders, cache: "no-store", signal: AbortSignal.timeout(3000) });
       const liveBody = (await liveResponse.json().catch(() => ({}))) as Record<string, unknown>;
-      if (!liveResponse.ok) return { name: service.name, state: "degraded", detail: `Liveness HTTP ${liveResponse.status}` };
+      if (!liveResponse.ok) return { name: service.name, state: "degraded" as const, detail: `Liveness HTTP ${liveResponse.status}` };
       const readyResponse = await fetch(`${service.url}/health/ready`, { headers: serviceHeaders, cache: "no-store", signal: AbortSignal.timeout(3000) });
       const readyBody = (await readyResponse.json().catch(() => ({}))) as Record<string, unknown>;
-      return { name: service.name, state: readyResponse.ok ? "online" : "degraded", detail: readyResponse.ok ? "ready" : String(readyBody.detail ?? readyBody.status ?? "dependencies unavailable"), live: String(liveBody.status ?? "alive") };
+      const live = String(liveBody.status ?? "alive");
+      if (!readyResponse.ok) {
+        return { name: service.name, state: "degraded" as const, detail: String(readyBody.detail ?? readyBody.status ?? "dependencies unavailable"), live };
+      }
+      return { name: service.name, state: "online" as const, detail: "ready", live };
     } catch {
-      return { name: service.name, state: "offline", detail: "Service is not reachable" };
+      return { name: service.name, state: "offline" as const, detail: "Service is not reachable" };
     }
   }));
+
+  let gatewayStatus: { workforce?: GatewayServiceHealth; observability?: GatewayServiceHealth } = {};
+  try {
+    const statusResponse = await fetch(assistantGatewayUrl("/v1/status"), {
+      headers: { authorization: access.authorization },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (statusResponse.ok) gatewayStatus = (await statusResponse.json()) as typeof gatewayStatus;
+  } catch { /* mapped to offline below */ }
+
+  results.push(mapGatewayStatus("Agent Workforce", gatewayStatus.workforce));
+  results.push(mapGatewayStatus("Observability", gatewayStatus.observability));
+
   let capabilities: Record<string, unknown> | null = null;
   const runner = services[1];
   try {

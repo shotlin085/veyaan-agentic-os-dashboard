@@ -8,7 +8,7 @@ export async function GET(request: Request, { params }: { params: { workspaceId:
   if (!authorization) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   const query = `workspace_id=${encodeURIComponent(params.workspaceId)}`;
   try {
-    const response = await fetch(assistantGatewayUrl(`/v1/workforce/departments?${query}`), {
+    const response = await fetch(assistantGatewayUrl(`/v1/telemetry/events?${query}`), {
       headers: { authorization },
       cache: "no-store",
     });
@@ -18,6 +18,6 @@ export async function GET(request: Request, { params }: { params: { workspaceId:
       headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
     });
   } catch {
-    return NextResponse.json({ error: "Agent Workforce is not reachable." }, { status: 503 });
+    return NextResponse.json({ error: "Observability is not reachable." }, { status: 503 });
   }
 }
