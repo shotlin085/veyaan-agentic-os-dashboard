@@ -14,11 +14,15 @@ export const dynamic = "force-dynamic";
  * existing /v1/workforce proxy - nothing here is simulated.
  */
 
-async function workforceCall(authorization: string, path: string, body: unknown) {
+async function workforceCall(authorization: string, path: string, workspaceId: string, body: Record<string, unknown>) {
+  // The gateway's workforce proxy requires workspace_id in every request
+  // body for its own tenancy check (_workspace_access), independent of
+  // whether the specific Workforce endpoint being forwarded to actually
+  // uses that field itself - harmless extra key otherwise.
   const response = await fetch(assistantGatewayUrl(`/v1/workforce/${path}`), {
     method: "POST",
     headers: { authorization, "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, workspace_id: workspaceId }),
     cache: "no-store",
   });
   const parsed = await response.json().catch(() => null);
@@ -43,11 +47,10 @@ export async function POST(request: Request, { params }: { params: { workspaceId
   const slug = `${agentName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}-${Date.now().toString(36)}`;
 
   try {
-    const definition = await workforceCall(authorization, "agents", {
+    const definition = await workforceCall(authorization, "agents", params.workspaceId, {
       name: slug,
       description: `Auto-provisioned from a Workflow Studio task for "${agentName}".`,
       created_by: actor,
-      workspace_id: params.workspaceId,
       contract: {
         first_priority: "Understand the task fully before acting on it.",
         allowed_responsibilities: ["Complete the assigned task"],
@@ -59,25 +62,23 @@ export async function POST(request: Request, { params }: { params: { workspaceId
       },
     });
 
-    const version = await workforceCall(authorization, `agents/${definition.id}/versions`, {
+    const version = await workforceCall(authorization, `agents/${definition.id}/versions`, params.workspaceId, {
       version_label: "v1",
       created_by: actor,
     });
 
-    await workforceCall(authorization, `agents/${definition.id}/versions/${version.id}/activate`, {
+    await workforceCall(authorization, `agents/${definition.id}/versions/${version.id}/activate`, params.workspaceId, {
       actor,
       reason: "Initial activation for a new workflow.",
     });
 
-    const instance = await workforceCall(authorization, "instances", {
-      workspace_id: params.workspaceId,
+    const instance = await workforceCall(authorization, "instances", params.workspaceId, {
       definition_id: definition.id,
       version_id: version.id,
       created_by: actor,
     });
 
-    const assignment = await workforceCall(authorization, "assignments", {
-      workspace_id: params.workspaceId,
+    const assignment = await workforceCall(authorization, "assignments", params.workspaceId, {
       instance_id: instance.id,
       assigned_by: actor,
       work_order: { task },
