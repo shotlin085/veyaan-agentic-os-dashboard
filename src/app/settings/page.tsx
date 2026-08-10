@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckIcon, LinkIcon, LockKeyhole, PlusIcon, SettingsIcon, TrashIcon, Unplug } from "lucide-react";
+import {
+  CheckIcon,
+  LinkIcon,
+  LockKeyhole,
+  PlusIcon,
+  RefreshCwIcon,
+  ServerIcon,
+  SettingsIcon,
+  TrashIcon,
+  Unplug,
+  ZapIcon,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
 import { McpServerPanel, type McpServer } from "@/components/elements/mcp-server-panel";
@@ -11,6 +22,7 @@ import { useDefaultModel, useProviders } from "@/components/assistant/runtime/he
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
 import { useHermesToolsets } from "@/components/assistant/runtime/hermes-toolsets";
 import { rememberConnectorWorkspace, useConnectors } from "@/components/assistant/runtime/hermes-connectors";
+import { rememberMcpWorkspace, useHermesMcpServers } from "@/components/assistant/runtime/hermes-mcp-servers";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 
 // Best-effort brand match from a provider's base URL, purely for showing
@@ -71,6 +83,7 @@ export default function SettingsPage() {
       ) : (
         <>
           <ProvidersSection />
+          <McpServersSection />
           <ConnectorsSection />
           <AutoModeSection />
 
@@ -364,6 +377,321 @@ function ConnectorsSection() {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * Real, generic MCP server connections via Hermes's own dashboard API
+ * (app/hermes_mcp/ on the orchestrator) - paste any MCP server's URL or
+ * stdio command and connect it, distinct from the fixed GitHub/Vercel/
+ * Supabase/Canva OAuth2 connectors above. Two honest caveats surfaced
+ * directly in the UI rather than hidden: these servers are shared across
+ * the whole Hermes instance (not isolated per workspace), and a change
+ * here has no effect on real conversations until the gateway restarts.
+ */
+function McpServersSection() {
+  const { workspace } = useWorkspace();
+  const { servers, loading, error, addServer, removeServer, setEnabled, testServer, startAuthorize, restartGateway } =
+    useHermesMcpServers();
+  const [formOpen, setFormOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [mode, setMode] = useState<"url" | "command">("url");
+  const [url, setUrl] = useState("");
+  const [command, setCommand] = useState("npx");
+  const [args, setArgs] = useState("-y mcp-remote@latest https://example.com/mcp");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [busyName, setBusyName] = useState<string | null>(null);
+  const [rowMessage, setRowMessage] = useState<{ name: string; message: string } | null>(null);
+  const [restarting, setRestarting] = useState(false);
+  const [restarted, setRestarted] = useState(false);
+
+  const handleAdd = async () => {
+    const trimmedName = name.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!trimmedName) {
+      setFormError("A name is required.");
+      return;
+    }
+    if (mode === "url" && !url.trim()) {
+      setFormError("A server URL is required.");
+      return;
+    }
+    if (mode === "command" && !command.trim()) {
+      setFormError("A command is required.");
+      return;
+    }
+    setSubmitting(true);
+    setFormError(null);
+    const result = await addServer(
+      mode === "url"
+        ? { name: trimmedName, url: url.trim() }
+        : { name: trimmedName, command: command.trim(), args: args.trim().split(/\s+/).filter(Boolean) },
+    );
+    setSubmitting(false);
+    if (!result.ok) {
+      setFormError(result.error);
+      return;
+    }
+    setName("");
+    setUrl("");
+    setFormOpen(false);
+  };
+
+  const handleRemove = async (serverName: string) => {
+    setBusyName(serverName);
+    setRowMessage(null);
+    const result = await removeServer(serverName);
+    if (!result.ok) setRowMessage({ name: serverName, message: result.error });
+    setBusyName(null);
+  };
+
+  const handleToggle = async (serverName: string, enabled: boolean) => {
+    setBusyName(serverName);
+    setRowMessage(null);
+    const result = await setEnabled(serverName, enabled);
+    if (!result.ok) setRowMessage({ name: serverName, message: result.error });
+    setBusyName(null);
+  };
+
+  const handleTest = async (serverName: string) => {
+    setBusyName(serverName);
+    setRowMessage(null);
+    const result = await testServer(serverName);
+    if (!result.ok) {
+      setRowMessage({ name: serverName, message: result.error });
+    } else if (!result.value.ok) {
+      setRowMessage({ name: serverName, message: result.value.error ?? "Connection failed." });
+    } else {
+      setRowMessage({ name: serverName, message: `Connected - ${result.value.tools.length} tool(s) found.` });
+    }
+    setBusyName(null);
+  };
+
+  const handleAuthorize = async (serverName: string) => {
+    if (!workspace) return;
+    setBusyName(serverName);
+    setRowMessage(null);
+    const result = await startAuthorize(serverName);
+    if (!result.ok) {
+      setRowMessage({ name: serverName, message: result.error });
+      setBusyName(null);
+      return;
+    }
+    if (!result.value.authorization_url) {
+      setRowMessage({ name: serverName, message: result.value.error ?? "This server doesn't need authorization." });
+      setBusyName(null);
+      return;
+    }
+    rememberMcpWorkspace(workspace.id);
+    window.location.href = result.value.authorization_url;
+  };
+
+  const handleRestart = async () => {
+    setRestarting(true);
+    setRestarted(false);
+    const result = await restartGateway();
+    setRestarting(false);
+    if (result.ok) {
+      setRestarted(true);
+      setTimeout(() => setRestarted(false), 4000);
+    } else {
+      setRowMessage({ name: "", message: result.error });
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">MCP servers</h2>
+          <p className="mt-1 max-w-2xl text-[13px] leading-6 text-foreground/55">
+            Connect any MCP server - paste its URL, or a stdio command for ones that need it (e.g. an{" "}
+            <code className={mono}>npx mcp-remote</code> bridge) - real, generic, not limited to the four connectors
+            above. Shared across this whole Hermes instance, not per-workspace. Changes here only affect real
+            conversations after a gateway restart - use the button below once you&apos;re done adding/removing.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleRestart()}
+            disabled={restarting}
+            className={cn(ghostButton, "flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium disabled:opacity-50")}
+          >
+            <RefreshCwIcon className={cn("size-3.5", restarting && "animate-spin")} />
+            {restarted ? "Restarted" : restarting ? "Restarting..." : "Restart gateway"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setFormOpen((v) => !v)}
+            className={cn(inkButton, "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium")}
+          >
+            <PlusIcon className="size-3.5" />
+            Add
+          </button>
+        </div>
+      </div>
+
+      {formOpen && (
+        <div className={cn(paper, "flex flex-col gap-3 rounded-2xl p-4")}>
+          <label className="flex flex-col gap-1.5">
+            <span className={cn(mono, "text-foreground/40")}>Name</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="linear"
+              className={cn(field, "rounded-xl px-3 py-2 text-[13.5px] outline-none")}
+            />
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("url")}
+              className={cn(
+                "h-7 rounded-full px-3 text-[12px] font-medium transition-colors",
+                mode === "url" ? "bg-foreground text-background" : "bg-foreground/[0.06] text-foreground/55",
+              )}
+            >
+              URL
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("command")}
+              className={cn(
+                "h-7 rounded-full px-3 text-[12px] font-medium transition-colors",
+                mode === "command" ? "bg-foreground text-background" : "bg-foreground/[0.06] text-foreground/55",
+              )}
+            >
+              Command (stdio)
+            </button>
+          </div>
+          {mode === "url" ? (
+            <label className="flex flex-col gap-1.5">
+              <span className={cn(mono, "text-foreground/40")}>Server URL</span>
+              <input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://mcp.example.com/mcp"
+                className={cn(field, "rounded-xl px-3 py-2 text-[13.5px] outline-none")}
+              />
+              <span className={cn(mono, "text-foreground/35")}>
+                If it needs a login, you&apos;ll get a real Authorize button after adding it.
+              </span>
+            </label>
+          ) : (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className={cn(mono, "text-foreground/40")}>Command</span>
+                <input
+                  value={command}
+                  onChange={(e) => setCommand(e.target.value)}
+                  className={cn(field, "rounded-xl px-3 py-2 text-[13.5px] outline-none")}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className={cn(mono, "text-foreground/40")}>Arguments</span>
+                <input
+                  value={args}
+                  onChange={(e) => setArgs(e.target.value)}
+                  className={cn(field, "rounded-xl px-3 py-2 text-[13.5px] outline-none")}
+                />
+                <span className={cn(mono, "text-foreground/35")}>
+                  Space-separated. If this needs login, it&apos;ll need SSH-assisted setup - ask for help.
+                </span>
+              </label>
+            </>
+          )}
+          {formError && <p className="text-[12.5px] leading-snug text-destructive/80">{formError}</p>}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setFormOpen(false)}
+              className="h-8 rounded-full px-3.5 text-xs font-medium text-foreground/55 transition-colors hover:bg-foreground/[0.06] hover:text-foreground/90"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleAdd()}
+              disabled={submitting}
+              className={cn(inkButton, "h-8 rounded-full px-3.5 text-xs font-medium disabled:opacity-50")}
+            >
+              {submitting ? "Adding..." : "Add server"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error ? (
+        <p className="text-[13px] leading-snug text-destructive/80">{error}</p>
+      ) : loading && servers.length === 0 ? (
+        <p className={cn(mono, "text-foreground/35")}>Loading MCP servers...</p>
+      ) : servers.length === 0 && !formOpen ? (
+        <p className={cn(mono, "text-foreground/35")}>No MCP servers connected yet.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {servers.map((server) => (
+            <div key={server.name} className="flex flex-col gap-1.5">
+              <div className={cn(paper, "flex items-center gap-3 rounded-2xl p-3")}>
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.06]">
+                  <ServerIcon className="size-3.5 text-foreground/60" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13.5px] text-foreground/90">{server.name}</p>
+                  <p className={cn(mono, "truncate", server.enabled ? "text-status-healthy" : "text-foreground/35")}>
+                    {server.transport}
+                    {server.url ? ` · ${server.url}` : ""}
+                    {typeof server.tool_count === "number" ? ` · ${server.tool_count} tools` : ""}
+                    {server.enabled ? " · enabled" : " · disabled"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleToggle(server.name, !server.enabled)}
+                  disabled={busyName === server.name}
+                  title={server.enabled ? "Disable" : "Enable"}
+                  className={cn(ghostButton, "size-7 shrink-0 disabled:opacity-50")}
+                >
+                  {server.enabled ? <Unplug className="size-3.5" /> : <ZapIcon className="size-3.5" />}
+                </button>
+                {server.url && (
+                  <button
+                    type="button"
+                    onClick={() => void handleAuthorize(server.name)}
+                    disabled={busyName === server.name}
+                    className={cn(ghostButton, "flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[12px] font-medium disabled:opacity-50")}
+                  >
+                    <LinkIcon className="size-3" />
+                    Authorize
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleTest(server.name)}
+                  disabled={busyName === server.name}
+                  className={cn(ghostButton, "flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[12px] font-medium disabled:opacity-50")}
+                >
+                  Test
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Remove ${server.name}`}
+                  onClick={() => void handleRemove(server.name)}
+                  disabled={busyName === server.name}
+                  className={cn(ghostButton, "size-7 shrink-0 disabled:opacity-50")}
+                >
+                  <TrashIcon className="size-3.5" />
+                </button>
+              </div>
+              {rowMessage?.name === server.name && (
+                <p className="px-1 text-[12.5px] leading-snug text-foreground/60">{rowMessage.message}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {rowMessage?.name === "" && <p className="text-[12.5px] leading-snug text-destructive/80">{rowMessage.message}</p>}
     </section>
   );
 }
