@@ -11,6 +11,7 @@ export interface HermesConversation {
   title: string | null;
   status: string;
   channel: string;
+  pinned: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -21,6 +22,7 @@ interface UseHermesConversationsResult {
   conversations: HermesConversation[];
   createConversation: () => Promise<string | null>;
   refresh: () => Promise<void>;
+  setPinned: (id: string, pinned: boolean) => Promise<void>;
 }
 
 /**
@@ -75,10 +77,14 @@ export function useHermesConversations(): UseHermesConversationsResult {
   const createConversation = useCallback(async (): Promise<string | null> => {
     if (!token || !workspaceId) return null;
     try {
+      // No title here - left null so the backend's own first-message
+      // auto-title (streaming_routes.py) can set it; the sidebar already
+      // falls back to displaying "New chat" for a null title in the
+      // meantime (see ChatSidebar.tsx's threads mapping).
       const response = await fetch(`/api/workspaces/${workspaceId}/conversations`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ title: "New chat", channel: "web" }),
+        body: JSON.stringify({ channel: "web" }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail ?? payload.error ?? "Could not start a conversation."));
@@ -91,5 +97,26 @@ export function useHermesConversations(): UseHermesConversationsResult {
     }
   }, [token, workspaceId]);
 
-  return { loading, error, conversations, createConversation, refresh };
+  const setPinned = useCallback(
+    async (id: string, pinned: boolean): Promise<void> => {
+      if (!token || !workspaceId) return;
+      // Optimistic - pin toggles should feel instant, and a failed PATCH
+      // still leaves the list in a reasonable state once refresh() next runs.
+      setConversations((current) => current.map((c) => (c.id === id ? { ...c, pinned } : c)));
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/conversations/${id}`, {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ pinned }),
+        });
+        if (!response.ok) throw new Error("Pin update failed.");
+      } catch (cause) {
+        setConversations((current) => current.map((c) => (c.id === id ? { ...c, pinned: !pinned } : c)));
+        setError(cause instanceof Error ? cause.message : "Pin update failed.");
+      }
+    },
+    [token, workspaceId],
+  );
+
+  return { loading, error, conversations, createConversation, refresh, setPinned };
 }

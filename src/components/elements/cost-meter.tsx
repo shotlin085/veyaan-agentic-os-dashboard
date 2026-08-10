@@ -31,7 +31,7 @@ export function CostMeter({
       data-slot="cost-meter"
       className={cn(
         paper,
-        "flex w-full max-w-sm flex-col gap-3 rounded-2xl p-4",
+        "flex w-full max-w-md flex-col gap-3 rounded-2xl p-4",
         className,
       )}
 
@@ -64,22 +64,25 @@ export function CostMeter({
         ))}
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {lines.map((line) => (
-          <div key={line.model} className="flex items-baseline gap-2">
-            <span className="text-foreground/75 min-w-0 flex-1 truncate text-[13px]">
-              {line.model}
-            </span>
-            <span
-              className={cn(mono, "text-foreground/25 shrink-0 tabular-nums")}
-            >
+          <div key={line.model} className="flex flex-col gap-0.5">
+            <div className="flex items-baseline gap-2">
+              <span
+                title={line.model}
+                className="text-foreground/75 min-w-0 flex-1 truncate text-[13px]"
+              >
+                {line.model}
+              </span>
+              <span
+                className={cn(mono, "text-foreground/55 shrink-0 tabular-nums")}
+              >
+                {line.cost}
+              </span>
+            </div>
+            <span className={cn(mono, "text-foreground/25 tabular-nums")}>
               {(line.inputTokens / 1000).toFixed(1)}k in ·{" "}
               {(line.outputTokens / 1000).toFixed(1)}k out
-            </span>
-            <span
-              className={cn(mono, "text-foreground/55 shrink-0 tabular-nums")}
-            >
-              {line.cost}
             </span>
           </div>
         ))}

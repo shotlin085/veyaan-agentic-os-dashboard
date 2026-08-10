@@ -11,6 +11,9 @@ import type { HermesConversation } from "./hermes-conversations";
 interface HermesRuntimeProviderProps {
   conversation: HermesConversation | null;
   children: ReactNode;
+  /** See hermes-adapter.ts's HermesAdapterConfig.onTurnSettled - lets the
+   * sidebar refetch after each turn so recency ordering/auto-title stay live. */
+  onTurnSettled?: () => void;
 }
 
 /**
@@ -21,7 +24,7 @@ interface HermesRuntimeProviderProps {
  * is what actually triggers a fresh history fetch for the newly active
  * conversation rather than reusing whatever the previous one loaded.
  */
-function HermesRuntimeMount({ conversation, children }: HermesRuntimeProviderProps) {
+function HermesRuntimeMount({ conversation, children, onTurnSettled }: HermesRuntimeProviderProps) {
   const { session } = useAuth();
   const { workspace } = useWorkspace();
 
@@ -30,8 +33,9 @@ function HermesRuntimeMount({ conversation, children }: HermesRuntimeProviderPro
       workspaceId: workspace?.id ?? "",
       conversationId: conversation?.id ?? "",
       token: session?.access_token ?? "",
+      onTurnSettled,
     }),
-    [workspace?.id, conversation?.id, session?.access_token],
+    [workspace?.id, conversation?.id, session?.access_token, onTurnSettled],
   );
 
   const adapter = useMemo(() => createHermesAdapter(runtimeConfig), [runtimeConfig]);
@@ -56,9 +60,9 @@ function HermesRuntimeMount({ conversation, children }: HermesRuntimeProviderPro
   return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
 }
 
-export function HermesRuntimeProvider({ conversation, children }: HermesRuntimeProviderProps) {
+export function HermesRuntimeProvider({ conversation, children, onTurnSettled }: HermesRuntimeProviderProps) {
   return (
-    <HermesRuntimeMount key={conversation?.id ?? "none"} conversation={conversation}>
+    <HermesRuntimeMount key={conversation?.id ?? "none"} conversation={conversation} onTurnSettled={onTurnSettled}>
       {children}
     </HermesRuntimeMount>
   );

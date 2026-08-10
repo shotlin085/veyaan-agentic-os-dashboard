@@ -19,17 +19,19 @@ export function ThreadSearch({
   activeId,
   onQueryChange,
   onSelect,
+  onTogglePin,
   className,
   ...props
 }: Omit<
   ComponentProps<"div">,
-  "children" | "threads" | "query" | "activeId" | "onQueryChange" | "onSelect"
+  "children" | "threads" | "query" | "activeId" | "onQueryChange" | "onSelect" | "onTogglePin"
 > & {
   threads: readonly SearchableThread[];
   query: string;
   activeId: string;
   onQueryChange?: (query: string) => void;
   onSelect?: (id: string) => void;
+  onTogglePin?: (id: string, pinned: boolean) => void;
 }) {
   const matches = threads.filter((thread) =>
     `${thread.title} ${thread.preview}`
@@ -69,29 +71,50 @@ export function ThreadSearch({
   };
 
   const row = (thread: SearchableThread) => (
-    <button
+    <div
       key={thread.id}
-      type="button"
-      onClick={() => onSelect?.(thread.id)}
       className={cn(
-        "flex flex-col gap-0.5 rounded-xl px-2 py-1 text-start transition-colors",
+        "group/thread flex items-start gap-1 rounded-xl px-2 py-1 transition-colors",
         thread.id === activeId
           ? "bg-foreground/[0.05]"
           : "hover:bg-foreground/[0.03]",
       )}
     >
-      <span className="flex items-center gap-1.5">
-        {thread.pinned && (
-          <PinIcon className="text-foreground/30 size-2.5 shrink-0" />
-        )}
-        <span className="min-w-0 flex-1 truncate text-[13px]">
-          {thread.title}
+      <button
+        type="button"
+        onClick={() => onSelect?.(thread.id)}
+        className="flex min-w-0 flex-1 flex-col gap-0.5 text-start"
+      >
+        <span className="flex items-center gap-1.5">
+          {thread.pinned && (
+            <PinIcon className="text-foreground/30 size-2.5 shrink-0 fill-current" />
+          )}
+          <span className="min-w-0 flex-1 truncate text-[13px]">
+            {thread.title}
+          </span>
         </span>
-      </span>
-      <span className="text-foreground/35 truncate text-xs">
-        {thread.preview}
-      </span>
-    </button>
+        <span className="text-foreground/35 truncate text-xs">
+          {thread.preview}
+        </span>
+      </button>
+      {onTogglePin && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onTogglePin(thread.id, !thread.pinned);
+          }}
+          aria-label={thread.pinned ? "Unpin thread" : "Pin thread"}
+          aria-pressed={thread.pinned}
+          className={cn(
+            "shrink-0 rounded-md p-1 text-foreground/30 transition-colors hover:bg-foreground/[0.08] hover:text-foreground/80",
+            thread.pinned ? "opacity-100" : "opacity-0 group-hover/thread:opacity-100 focus-visible:opacity-100",
+          )}
+        >
+          <PinIcon className={cn("size-3", thread.pinned && "fill-current")} />
+        </button>
+      )}
+    </div>
   );
 
   return (

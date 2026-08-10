@@ -57,7 +57,7 @@ function dayGroup(iso: string): string {
  */
 export function ChatSidebar() {
   const pathname = usePathname();
-  const { conversations, activeId, loading, error, selectById, createConversation } = useConversations();
+  const { conversations, activeId, loading, error, selectById, createConversation, setPinned } = useConversations();
   const { user, signOut } = useAuth();
   const { workspaces, workspace, selectWorkspace } = useWorkspace();
   const { status } = useRuntimeStatus();
@@ -72,6 +72,7 @@ export function ChatSidebar() {
         title: conversation.title?.trim() || "New chat",
         group: dayGroup(conversation.updated_at),
         preview: conversation.channel === "voice" ? "Voice conversation" : "",
+        pinned: conversation.pinned,
       })),
     [conversations],
   );
@@ -117,6 +118,7 @@ export function ChatSidebar() {
             activeId={activeId ?? ""}
             onQueryChange={setQuery}
             onSelect={(id) => selectById(id)}
+            onTogglePin={(id, pinned) => void setPinned(id, pinned)}
             className="w-full max-w-none rounded-none bg-transparent p-0 shadow-none dark:bg-transparent dark:shadow-none"
           />
         )}

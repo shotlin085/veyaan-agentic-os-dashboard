@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * [conversationId] segment rather than component state).
  */
 export default function ConversationPage() {
-  const { activeConversation, activeId, loading, conversations } = useConversations();
+  const { activeConversation, activeId, loading, conversations, refresh } = useConversations();
   const notFound = !loading && conversations.length > 0 && !activeConversation;
 
   return (
@@ -38,7 +38,7 @@ export default function ConversationPage() {
           <p className="text-sm text-foreground/55">Loading conversation...</p>
         </div>
       ) : (
-        <HermesRuntimeProvider conversation={activeConversation}>
+        <HermesRuntimeProvider conversation={activeConversation} onTurnSettled={() => void refresh()}>
           <Thread />
         </HermesRuntimeProvider>
       )}

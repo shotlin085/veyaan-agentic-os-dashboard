@@ -33,6 +33,12 @@ export interface HermesAdapterConfig {
   workspaceId: string;
   conversationId: string;
   token: string;
+  /** Fired once a turn finishes (success, error, or cancel) so the
+   * sidebar can re-fetch and pick up the backend's updated_at bump / any
+   * newly auto-derived title (see streaming_routes.py's send_message) -
+   * without this, a conversation you just used never re-sorts to the top
+   * of its day group until a full page reload. */
+  onTurnSettled?: () => void;
 }
 
 export interface HermesUsage {
@@ -256,8 +262,11 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
           status: { type: "incomplete", reason: "cancelled" },
           metadata: { custom: { usage, route }, timing: buildTiming() },
         };
+        config.onTurnSettled?.();
         return;
       }
+
+      config.onTurnSettled?.();
     },
   };
 }

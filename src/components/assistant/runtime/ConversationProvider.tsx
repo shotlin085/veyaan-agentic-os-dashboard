@@ -12,6 +12,8 @@ interface ConversationContextValue {
   activeConversation: HermesConversation | null;
   selectById: (id: string) => void;
   createConversation: () => Promise<string | null>;
+  refresh: () => Promise<void>;
+  setPinned: (id: string, pinned: boolean) => Promise<void>;
 }
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
@@ -48,6 +50,8 @@ export const ConversationProvider: FC<{ children: ReactNode }> = ({ children }) 
       if (id) router.push(`/c/${id}`);
       return id;
     },
+    refresh: hook.refresh,
+    setPinned: hook.setPinned,
   };
 
   return <ConversationContext.Provider value={value}>{children}</ConversationContext.Provider>;
