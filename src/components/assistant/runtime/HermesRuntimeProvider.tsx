@@ -36,7 +36,10 @@ function HermesRuntimeMount({ conversation, children }: HermesRuntimeProviderPro
 
   const adapter = useMemo(() => createHermesAdapter(runtimeConfig), [runtimeConfig]);
   const history = useMemo(() => createHermesHistoryAdapter(runtimeConfig), [runtimeConfig]);
-  const runtime = useLocalRuntime(adapter, { adapters: { history } });
+  // Lets a message typed while a run is in flight queue instead of being
+  // blocked or silently discarded - real assistant-ui capability, no
+  // backend change needed (see bindings/Thread.tsx's QueuePanel).
+  const runtime = useLocalRuntime(adapter, { adapters: { history }, unstable_enableMessageQueue: true });
 
   return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
 }

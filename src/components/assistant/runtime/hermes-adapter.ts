@@ -109,93 +109,113 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       let errored = false;
       const toolCalls = new Map<string, ToolCallState>();
 
-      while (!finished) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const frames = buffer.split("\n\n");
-        buffer = frames.pop() ?? "";
+      const buildToolParts = (): ThreadAssistantMessagePart[] =>
+        Array.from(toolCalls.values()).map((call) => ({
+          type: "tool-call",
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
+          args: {},
+          argsText: call.label ?? call.toolName,
+          result: call.status === "running" ? undefined : call.status === "failed" ? "Failed" : "Done",
+          isError: call.status === "failed",
+        }));
 
-        for (const frame of frames) {
-          const line = frame.split("\n").find((entry) => entry.startsWith("data: "));
-          if (!line) continue;
+      try {
+        while (!finished) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split("\n\n");
+          buffer = frames.pop() ?? "";
 
-          let parsed: HermesStreamEvent;
-          try {
-            parsed = JSON.parse(line.slice("data: ".length));
-          } catch {
-            continue;
-          }
+          for (const frame of frames) {
+            const line = frame.split("\n").find((entry) => entry.startsWith("data: "));
+            if (!line) continue;
 
-          switch (parsed.event) {
-            case "assistant.token.delta":
-              accumulated += parsed.content ?? "";
-              break;
-            case "assistant.message.completed":
-              accumulated = parsed.content ?? accumulated;
-              finished = true;
-              break;
-            case "runtime.failed":
-              accumulated = parsed.error ?? "Hermes runtime failed.";
-              finished = true;
-              errored = true;
-              break;
-            case "assistant.usage":
-              usage = {
-                promptTokens: parsed.prompt_tokens,
-                completionTokens: parsed.completion_tokens,
-                totalTokens: parsed.total_tokens,
-              };
-              break;
-            case "assistant.route":
-              route = { path: parsed.path, model: parsed.model };
-              break;
-            case "assistant.tool.progress": {
-              // Hermes only sends `label`/`emoji` on the "running" event -
-              // the matching "completed"/"failed" event for the same
-              // tool_call_id carries just {tool, toolCallId, status}, so the
-              // existing record's label/emoji/tool must be preserved across
-              // the update rather than overwritten with undefined.
-              const id = parsed.tool_call_id;
-              if (id) {
-                const existing = toolCalls.get(id);
-                toolCalls.set(id, {
-                  toolCallId: id,
-                  toolName: parsed.tool ?? existing?.toolName ?? "tool",
-                  label: parsed.label ?? existing?.label,
-                  emoji: parsed.emoji ?? existing?.emoji,
-                  status: parsed.status === "completed" || parsed.status === "failed" ? parsed.status : "running",
-                });
-              }
-              break;
+            let parsed: HermesStreamEvent;
+            try {
+              parsed = JSON.parse(line.slice("data: ".length));
+            } catch {
+              continue;
             }
-            default:
-              break;
+
+            switch (parsed.event) {
+              case "assistant.token.delta":
+                accumulated += parsed.content ?? "";
+                break;
+              case "assistant.message.completed":
+                accumulated = parsed.content ?? accumulated;
+                finished = true;
+                break;
+              case "runtime.failed":
+                accumulated = parsed.error ?? "Hermes runtime failed.";
+                finished = true;
+                errored = true;
+                break;
+              case "assistant.usage":
+                usage = {
+                  promptTokens: parsed.prompt_tokens,
+                  completionTokens: parsed.completion_tokens,
+                  totalTokens: parsed.total_tokens,
+                };
+                break;
+              case "assistant.route":
+                route = { path: parsed.path, model: parsed.model };
+                break;
+              case "assistant.tool.progress": {
+                // Hermes only sends `label`/`emoji` on the "running" event -
+                // the matching "completed"/"failed" event for the same
+                // tool_call_id carries just {tool, toolCallId, status}, so the
+                // existing record's label/emoji/tool must be preserved across
+                // the update rather than overwritten with undefined.
+                const id = parsed.tool_call_id;
+                if (id) {
+                  const existing = toolCalls.get(id);
+                  toolCalls.set(id, {
+                    toolCallId: id,
+                    toolName: parsed.tool ?? existing?.toolName ?? "tool",
+                    label: parsed.label ?? existing?.label,
+                    emoji: parsed.emoji ?? existing?.emoji,
+                    status: parsed.status === "completed" || parsed.status === "failed" ? parsed.status : "running",
+                  });
+                }
+                break;
+              }
+              default:
+                break;
+            }
+
+            let status:
+              | { type: "running" }
+              | { type: "complete"; reason: "stop" }
+              | { type: "incomplete"; reason: "error" };
+            if (!finished) status = { type: "running" };
+            else if (errored) status = { type: "incomplete", reason: "error" };
+            else status = { type: "complete", reason: "stop" };
+
+            yield {
+              content: [...buildToolParts(), { type: "text", text: accumulated }],
+              status,
+              metadata: { custom: { usage, route } },
+            };
           }
 
-          let status: { type: "running" } | { type: "complete"; reason: "stop" } | { type: "incomplete"; reason: "error" };
-          if (!finished) status = { type: "running" };
-          else if (errored) status = { type: "incomplete", reason: "error" };
-          else status = { type: "complete", reason: "stop" };
-
-          const toolParts: ThreadAssistantMessagePart[] = Array.from(toolCalls.values()).map((call) => ({
-            type: "tool-call",
-            toolCallId: call.toolCallId,
-            toolName: call.toolName,
-            args: {},
-            argsText: call.label ?? call.toolName,
-            result: call.status === "running" ? undefined : call.status === "failed" ? "Failed" : "Done",
-            isError: call.status === "failed",
-          }));
-
-          yield {
-            content: [...toolParts, { type: "text", text: accumulated }],
-            status,
-            metadata: { custom: { usage, route } },
-          };
+          if (finished) break;
         }
-
-        if (finished) break;
+      } catch (cause) {
+        // A Stop click aborts `abortSignal`, which rejects the in-flight
+        // reader.read() with an AbortError - catch it explicitly and yield
+        // a real `incomplete/cancelled` status (rather than letting the
+        // exception propagate) so the UI can render StoppedRun instead of
+        // treating this the same as a network failure.
+        const isAbort = abortSignal.aborted || (cause instanceof DOMException && cause.name === "AbortError");
+        if (!isAbort) throw cause;
+        yield {
+          content: [...buildToolParts(), { type: "text", text: accumulated }],
+          status: { type: "incomplete", reason: "cancelled" },
+          metadata: { custom: { usage, route } },
+        };
+        return;
       }
     },
   };

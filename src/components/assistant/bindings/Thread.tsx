@@ -42,6 +42,8 @@ import {
 import { ThinkingIndicator } from "@/components/elements/thinking-indicator";
 import { ErrorState as ErrorStateCard } from "@/components/elements/error-state";
 import { ToolCall } from "@/components/elements/tool-call";
+import { StoppedRun } from "@/components/elements/stopped-run";
+import { MessageQueue } from "@/components/elements/message-queue";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 
 const STARTER_PROMPTS = [
@@ -152,6 +154,7 @@ export const Thread: FC = () => {
 
             <div className="sticky bottom-0 mt-auto flex flex-col items-center gap-3 bg-background pb-4">
               <ThreadScrollToBottom />
+              <QueuePanel />
               <Composer />
             </div>
           </div>
@@ -191,6 +194,37 @@ const ThreadScrollToBottom: FC = () => {
         New messages
       </button>
     </ThreadPrimitive.ScrollToBottom>
+  );
+};
+
+/**
+ * Shows messages typed while a run is in flight (unstable_
+ * enableMessageQueue: true, set in HermesRuntimeProvider.tsx) instead of
+ * blocking the composer or discarding them. Real assistant-ui queue
+ * state/methods (composer.queue, composer.queueItem(id).remove()) - no
+ * backend involved.
+ */
+const QueuePanel: FC = () => {
+  const aui = useAui();
+  const queue = useAuiState((s) => s.composer.queue);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const runningText = useAuiState((s) => {
+    const last = [...s.thread.messages].reverse().find((m) => m.role === "user");
+    if (!last || !Array.isArray(last.content)) return "";
+    return last.content
+      .filter((part): part is { type: "text"; text: string } => part.type === "text")
+      .map((part) => part.text)
+      .join(" ");
+  });
+
+  if (!isRunning || queue.length === 0) return null;
+
+  return (
+    <MessageQueue
+      running={runningText}
+      queued={queue.map((item) => ({ id: item.id, text: item.prompt }))}
+      onCancel={(id) => aui.composer.queueItem({ id }).remove()}
+    />
   );
 };
 
@@ -254,6 +288,7 @@ const EditComposer: FC = () => {
 };
 
 const AssistantMessage: FC = () => {
+  const [dismissed, setDismissed] = useState(false);
   const isEmptyRunning = useAuiState((s) => {
     if (s.message.role !== "assistant" || s.message.status?.type !== "running") return false;
     const text = s.message.content
@@ -262,36 +297,87 @@ const AssistantMessage: FC = () => {
       .join("");
     return text.length === 0;
   });
+  // Set by hermes-adapter.ts's abort handling (see run()'s catch block) -
+  // distinguishes "the user clicked Stop" from a genuine runtime.failed,
+  // which MessagePrimitive.Error/ErrorStateCard below still covers.
+  const isCancelled = useAuiState(
+    (s) =>
+      s.message.role === "assistant" &&
+      s.message.status?.type === "incomplete" &&
+      s.message.status.reason === "cancelled",
+  );
 
   return (
     <MessagePrimitive.Root className="group/message flex w-full flex-col gap-1.5">
       <div className="flex flex-col gap-2 text-sm leading-relaxed text-foreground">
-        {isEmptyRunning ? (
+        {isCancelled && !dismissed ? (
+          <StoppedRunBlock onDiscard={() => setDismissed(true)} />
+        ) : isEmptyRunning ? (
           <ThinkingIndicator label="Thinking" />
         ) : (
           <MessagePrimitive.Content
             components={{ Text: MarkdownText, tools: { Fallback: BoundToolCall } }}
           />
         )}
-        <MessagePrimitive.Error>
-          <ErrorPrimitive.Root asChild>
-            <div>
-              <ErrorStateCard
-                title="This response failed"
-                detail=""
-                retrying={false}
-                onRetry={() => {}}
-              />
-              <span className="sr-only"><ErrorPrimitive.Message /></span>
-            </div>
-          </ErrorPrimitive.Root>
-        </MessagePrimitive.Error>
+        {!isCancelled && (
+          <MessagePrimitive.Error>
+            <ErrorPrimitive.Root asChild>
+              <div>
+                <ErrorStateCard
+                  title="This response failed"
+                  detail=""
+                  retrying={false}
+                  onRetry={() => {}}
+                />
+                <span className="sr-only"><ErrorPrimitive.Message /></span>
+              </div>
+            </ErrorPrimitive.Root>
+          </MessagePrimitive.Error>
+        )}
       </div>
       <div className="flex items-center gap-1 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
         <AssistantActionBar />
         <MessageBranchPicker />
       </div>
     </MessagePrimitive.Root>
+  );
+};
+
+/**
+ * Real "Continue" - sends a genuine follow-up user message asking Hermes
+ * to pick the reply back up (Hermes holds conversation state server-side
+ * by conversationId, so this works exactly like any other turn). "Discard"
+ * is a local-only dismiss: there is no partial-response-discard concept on
+ * the backend, so this just stops showing the stopped-run chrome for this
+ * message and reveals the partial text underneath, rather than pretending
+ * to delete anything server-side.
+ */
+const StoppedRunBlock: FC<{ onDiscard: () => void }> = ({ onDiscard }) => {
+  const aui = useAui();
+  // Selector must return a stable primitive, not a freshly-built array -
+  // useAuiState compares snapshots with Object.is, and a new array
+  // identity on every read causes React's "maximum update depth
+  // exceeded" (the external-store subscription never settles). Splitting
+  // into words happens after the selector, in plain render.
+  const text = useAuiState((s) => {
+    if (s.message.role !== "assistant") return "";
+    return s.message.content
+      .filter((part): part is { type: "text"; text: string } => part.type === "text")
+      .map((part) => part.text)
+      .join("");
+  });
+  const words = text.split(" ").filter(Boolean);
+
+  return (
+    <StoppedRun
+      words={words}
+      reason="Stopped"
+      onContinue={() => {
+        aui.composer.setText("Please continue from where you left off.");
+        aui.composer.send();
+      }}
+      onDiscard={onDiscard}
+    />
   );
 };
 
