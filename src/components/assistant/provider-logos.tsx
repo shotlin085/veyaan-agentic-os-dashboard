@@ -141,6 +141,37 @@ const PoolsideLogo: FC<LogoProps> = (props) => (
   </svg>
 );
 
+const GitHubLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+    <path d="M12 .3C5.37.3 0 5.67 0 12.3c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58 0-.28-.01-1.03-.02-2.03-3.34.72-4.04-1.61-4.04-1.61-.55-1.38-1.33-1.75-1.33-1.75-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.65 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.02 2.9-.02 3.29 0 .32.22.7.83.58C20.56 22.09 24 17.6 24 12.3 24 5.67 18.63.3 12 .3Z" />
+  </svg>
+);
+
+const VercelLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+    <path d="M12 2.5 22.5 21H1.5L12 2.5Z" />
+  </svg>
+);
+
+const SupabaseLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <path fill="#3ECF8E" d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
+  </svg>
+);
+
+const CanvaLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <defs>
+      <linearGradient id="canva-grad" x1="2" y1="4" x2="22" y2="20" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#7D2AE8" />
+        <stop offset="1" stopColor="#00C4CC" />
+      </linearGradient>
+    </defs>
+    <circle cx="12" cy="12" r="10" fill="url(#canva-grad)" />
+    <path d="M16 8a5.7 5.7 0 1 0 0 8" stroke="#fff" strokeWidth="2.1" strokeLinecap="round" fill="none" />
+  </svg>
+);
+
 export interface ProviderLogoProps {
   provider: string;
   className?: string;
@@ -189,6 +220,14 @@ export const ProviderLogo: FC<ProviderLogoProps> = ({ provider, className }) => 
       return <SakanaLogo className={size} />;
     case "Poolside":
       return <PoolsideLogo className={size} />;
+    case "GitHub":
+      return <GitHubLogo className={size} />;
+    case "Vercel":
+      return <VercelLogo className={size} />;
+    case "Supabase":
+      return <SupabaseLogo className={size} />;
+    case "Canva":
+      return <CanvaLogo className={size} />;
     default:
       return <CpuIcon className={`${size} text-foreground/40`} />;
   }

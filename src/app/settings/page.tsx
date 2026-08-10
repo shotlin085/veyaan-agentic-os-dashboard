@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckIcon, LockKeyhole, PlusIcon, SettingsIcon, TrashIcon } from "lucide-react";
+import { CheckIcon, LinkIcon, LockKeyhole, PlusIcon, SettingsIcon, TrashIcon, Unplug } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
 import { McpServerPanel, type McpServer } from "@/components/elements/mcp-server-panel";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useDefaultModel, useProviders } from "@/components/assistant/runtime/hermes-providers";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
 import { useHermesToolsets } from "@/components/assistant/runtime/hermes-toolsets";
+import { rememberConnectorWorkspace, useConnectors } from "@/components/assistant/runtime/hermes-connectors";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 
 // Best-effort brand match from a provider's base URL, purely for showing
@@ -70,6 +71,7 @@ export default function SettingsPage() {
       ) : (
         <>
           <ProvidersSection />
+          <ConnectorsSection />
           <AutoModeSection />
 
           <section className="flex flex-col gap-3">
@@ -247,6 +249,108 @@ function ProvidersSection() {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * Real OAuth2 connectors (app/connectors/ on the orchestrator) - GitHub,
+ * Vercel, Supabase, Canva. Every one shows "Not configured yet" until a
+ * real OAuth app's client_id/secret is set on the server; only a real
+ * completed OAuth redirect ever flips a card to "Connected". Clicking
+ * Connect opens the real provider's own authorize page in this tab -
+ * this is a genuine external navigation, not a modal - and the flow
+ * finishes on /connectors/{provider}/callback.
+ */
+function ConnectorsSection() {
+  const { workspace } = useWorkspace();
+  const { connectors, loading, error, startAuthorize, disconnect } = useConnectors();
+  const [busyProvider, setBusyProvider] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleConnect = async (provider: string) => {
+    if (!workspace) return;
+    setBusyProvider(provider);
+    setActionError(null);
+    const result = await startAuthorize(provider);
+    if (!result.ok) {
+      setActionError(result.error);
+      setBusyProvider(null);
+      return;
+    }
+    rememberConnectorWorkspace(workspace.id);
+    window.location.href = result.url;
+  };
+
+  const handleDisconnect = async (provider: string) => {
+    setBusyProvider(provider);
+    setActionError(null);
+    const result = await disconnect(provider);
+    if (!result.ok) setActionError(result.error);
+    setBusyProvider(null);
+  };
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div>
+        <h2 className="text-sm font-semibold text-foreground">Connectors</h2>
+        <p className="mt-1 max-w-2xl text-[13px] leading-6 text-foreground/55">
+          Real OAuth connections to other services this workspace can use as tools, separate from
+          your API providers above. Each one needs a real OAuth app registered on the server
+          before Connect will do anything - see the setup notes below a card that isn&apos;t
+          configured yet.
+        </p>
+      </div>
+
+      {error ? (
+        <p className="text-[13px] leading-snug text-destructive/80">{error}</p>
+      ) : loading && connectors.length === 0 ? (
+        <p className={cn(mono, "text-foreground/35")}>Loading connectors...</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {connectors.map((connector) => (
+            <div key={connector.provider} className={cn(paper, "flex items-center gap-3 rounded-2xl p-3")}>
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.06]">
+                <ProviderLogo provider={connector.name} className="size-3.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13.5px] text-foreground/90">{connector.name}</p>
+                <p className={cn(mono, "truncate", connector.connected ? "text-status-healthy" : "text-foreground/35")}>
+                  {connector.connected
+                    ? `Connected${connector.account_label ? ` · ${connector.account_label}` : ""}`
+                    : connector.configured
+                      ? "Not connected"
+                      : "Not configured on this server yet"}
+                </p>
+              </div>
+              {connector.connected ? (
+                <button
+                  type="button"
+                  aria-label={`Disconnect ${connector.name}`}
+                  onClick={() => void handleDisconnect(connector.provider)}
+                  disabled={busyProvider === connector.provider}
+                  className={cn(ghostButton, "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium disabled:opacity-50")}
+                >
+                  <Unplug className="size-3.5" />
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleConnect(connector.provider)}
+                  disabled={!connector.configured || busyProvider === connector.provider}
+                  title={connector.configured ? undefined : `${connector.name} has no OAuth app configured on this server yet.`}
+                  className={cn(inkButton, "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium disabled:opacity-40")}
+                >
+                  <LinkIcon className="size-3.5" />
+                  {busyProvider === connector.provider ? "Connecting..." : "Connect"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {actionError && <p className="text-[12.5px] leading-snug text-destructive/80">{actionError}</p>}
     </section>
   );
 }
