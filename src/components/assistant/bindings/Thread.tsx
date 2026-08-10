@@ -48,18 +48,21 @@ import {
   ComposerActions,
   ComposerAttachButton,
   ComposerBar,
+  ComposerCommandItem,
   ComposerMenu,
   ComposerMenuItem,
   ComposerModelTrigger,
   ComposerSend,
   ComposerToolbar,
   ComposerVoiceButton,
+  useSlashMatches,
 } from "@/components/elements/composer";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
 import { useProviders } from "@/components/assistant/runtime/hermes-providers";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
+import { SLASH_COMMANDS, type SlashCommand } from "@/components/assistant/bindings/slash-commands";
 import type { HermesRoute, HermesUsage } from "@/components/assistant/runtime/hermes-adapter";
 
 const STARTER_PROMPTS = [
@@ -107,7 +110,18 @@ function humanizeToolName(toolName: string): { active: string; done: string } {
 const BoundToolCall: FC<ToolCallMessagePartProps> = (part) => {
   const [open, setOpen] = useState(false);
   const running = !part.status || part.status.type === "running";
+  // hermes-adapter.ts's buildToolParts() defaults argsText to the raw
+  // tool name when Hermes sent no label - so this equality is the real
+  // signal for "did Hermes actually give us a label" vs. "fall back to
+  // our guessed verb table." Real labels only arrive on the "running"
+  // frame per tool call (no separate past-tense version), so the same
+  // string covers both label/activeLabel when present.
+  const hasRealLabel = part.argsText !== part.toolName;
   const verbs = humanizeToolName(part.toolName);
+  const emoji: string | undefined = part.args?.emoji;
+  const prefix = emoji ? `${emoji} ` : "";
+  const doneLabel = hasRealLabel ? part.argsText : verbs.done;
+  const activeLabel = hasRealLabel ? part.argsText : verbs.active;
   const resultText = part.isError
     ? "Failed"
     : typeof part.result === "string"
@@ -118,8 +132,8 @@ const BoundToolCall: FC<ToolCallMessagePartProps> = (part) => {
 
   return (
     <ToolCall
-      label={verbs.done}
-      activeLabel={verbs.active}
+      label={`${prefix}${doneLabel}`}
+      activeLabel={`${prefix}${activeLabel}`}
       query={part.argsText}
       request={part.argsText || "(no arguments captured)"}
       result={resultText}
@@ -539,10 +553,41 @@ const MessageBranchPicker: FC = () => {
  * appeared to work would silently drop whatever was attached. The attach
  * button stays visible (it's part of the composer's visual language) but
  * disabled, matching the honest state rather than faking support.
+ *
+ * Slash commands are client-side text macros (see bindings/slash-commands.ts) -
+ * selecting one prefills the composer via the same aui.composer.setText()
+ * StarterPrompt already uses, it doesn't auto-send. The custom onKeyDown on
+ * ComposerPrimitive.Input only intercepts Arrow/Enter while the menu is open
+ * (preventDefault there skips assistant-ui's own Enter-to-send handler,
+ * confirmed via its composeEventHandlers wiring); every other key, or once
+ * the menu has no matches, falls through untouched.
  */
 const Composer: FC = () => {
+  const aui = useAui();
+  const value = useAuiState((s) => s.composer.text);
+  const matches = useSlashMatches(value, SLASH_COMMANDS) as SlashCommand[];
+  const [highlightIndex, setHighlightIndex] = useState(0);
+
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [value]);
+
+  const selectCommand = (command: SlashCommand) => {
+    aui.composer.setText(command.template);
+  };
+
   return (
     <ComposerPrimitive.Root className="relative w-full max-w-3xl">
+      <ComposerMenu open={matches.length > 0} align="start">
+        {matches.map((command, i) => (
+          <ComposerCommandItem
+            key={command.name}
+            command={command}
+            active={i === highlightIndex}
+            onClick={() => selectCommand(command)}
+          />
+        ))}
+      </ComposerMenu>
       <ComposerBar>
         <ComposerPrimitive.Input
           placeholder="Message VEYAAN..."
@@ -550,6 +595,19 @@ const Composer: FC = () => {
           rows={1}
           autoFocus
           aria-label="Message input"
+          onKeyDown={(event) => {
+            if (matches.length === 0 || event.nativeEvent.isComposing) return;
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setHighlightIndex((i) => (i + 1) % matches.length);
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setHighlightIndex((i) => (i - 1 + matches.length) % matches.length);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              selectCommand(matches[highlightIndex] ?? matches[0]);
+            }
+          }}
         />
         <ComposerToolbar>
           <ComposerAttachButton title="File attachments aren't supported by Hermes yet" />

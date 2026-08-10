@@ -159,7 +159,13 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
           type: "tool-call",
           toolCallId: call.toolCallId,
           toolName: call.toolName,
-          args: {},
+          // Hermes only sends emoji/label on the tool call's "running"
+          // frame (see the case block below), so this is real per-call
+          // data, not a placeholder - args has no other real content to
+          // carry, since Hermes's tool.progress events never include
+          // structured call arguments. Omit the key entirely rather than
+          // `emoji: undefined` - args must be valid JSON.
+          args: (call.emoji ? { emoji: call.emoji } : {}) as Record<string, string>,
           argsText: call.label ?? call.toolName,
           result: call.status === "running" ? undefined : call.status === "failed" ? "Failed" : "Done",
           isError: call.status === "failed",
