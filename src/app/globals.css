@@ -49,24 +49,6 @@
   --input: oklch(0.9 0 0);
   --ring: oklch(0.6 0 0);
   --radius: 0.75rem;
-
-  /* Project-native palette, referenced directly across ~29 page/layout
-     files as raw CSS vars and Tailwind utilities (bg-bg-app, text-accent-
-     cyan, etc). Retargeted onto the semantic tokens above instead of
-     literal hex, so every one of those files goes monochrome with zero
-     component edits. Phase 10 retires this indirection and renames the
-     call sites directly. */
-  --bg-app: var(--background);
-  --bg-surface-1: var(--popover);
-  --bg-surface-2: var(--muted);
-  --bg-surface-3: var(--accent);
-  --border-subtle: var(--border);
-  --border-glow: var(--border);
-  --accent-cyan: var(--foreground);
-  --accent-purple: var(--muted-foreground);
-  --text-primary: var(--foreground);
-  --text-secondary: var(--muted-foreground);
-  --text-muted: var(--muted-foreground);
 }
 
 .dark {
@@ -92,18 +74,6 @@
   --input: oklch(0.24 0 0);
   --ring: oklch(0.55 0 0);
   --radius: 0.75rem;
-
-  --bg-app: var(--background);
-  --bg-surface-1: var(--popover);
-  --bg-surface-2: var(--muted);
-  --bg-surface-3: var(--accent);
-  --border-subtle: var(--border);
-  --border-glow: var(--border);
-  --accent-cyan: var(--foreground);
-  --accent-purple: var(--muted-foreground);
-  --text-primary: var(--foreground);
-  --text-secondary: var(--muted-foreground);
-  --text-muted: var(--muted-foreground);
 }
 
 @theme inline {
@@ -134,26 +104,6 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
 
-  /* Project-native palette utilities - exact v3 class names preserved
-     (bg-bg-app, bg-bg-surface-1/2/3, text-bg-app, bg/text/border-accent-cyan,
-     bg/text/border-accent-purple, border-border-subtle, border-border-glow,
-     bg/text/border-status-*, shadow-glow, shadow-purpleGlow). Deliberately
-     not adding shorter aliases (e.g. `--color-app`, `--color-surface-1`,
-     `--color-glow`) that some page files reference as bare classes like
-     `bg-app`/`border-glow` - those were already-undefined no-op utilities
-     before this migration and stay that way; Phase 10 is the real cleanup. */
-  --color-bg-app: var(--bg-app);
-  --color-bg-surface-1: var(--bg-surface-1);
-  --color-bg-surface-2: var(--bg-surface-2);
-  --color-bg-surface-3: var(--bg-surface-3);
-  --color-accent-cyan: var(--accent-cyan);
-  --color-accent-purple: var(--accent-purple);
-  --color-border-subtle: var(--border-subtle);
-  --color-border-glow: var(--border-glow);
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-muted: var(--text-muted);
-
   /* Exactly two hues survive in the whole app: destructive/danger red and
      warning amber. success/working/waiting carry meaning through weight
      and opacity instead of color, the way ChatGPT/Claude do it. */
@@ -162,9 +112,6 @@
   --color-status-danger: var(--destructive);
   --color-status-working: var(--muted-foreground);
   --color-status-waiting: var(--muted-foreground);
-
-  --shadow-glow: none;
-  --shadow-purpleGlow: none;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
@@ -178,8 +125,8 @@
 }
 
 body {
-  background-color: var(--bg-app);
-  color: var(--text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
   font-family: var(--font-sans);
   overflow-x: hidden;
 }
@@ -207,22 +154,6 @@ body {
 *:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
-}
-
-/* Flat panel surface - no glassmorphism, no backdrop-filter, no glow */
-.glass-panel {
-  background: var(--popover);
-  border: 1px solid var(--border);
-}
-
-.glass-panel-interactive {
-  background: var(--popover);
-  border: 1px solid var(--border);
-  transition: border-color 0.2s ease;
-}
-
-.glass-panel-interactive:hover {
-  border-color: var(--ring);
 }
 
 @layer utilities {

@@ -34,14 +34,14 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   return (
     <div className="space-y-6 pb-12">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border-subtle pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-3">
-          <Link href="/projects" className="p-2 rounded-xl bg-bg-surface-2 border border-border-subtle text-text-muted hover:text-white transition-all">
+          <Link href="/projects" className="p-2 rounded-xl bg-muted border border-border text-muted-foreground hover:text-white transition-all">
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30">
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-foreground/20 text-foreground border border-foreground/30">
                 {project.code}
               </span>
               <h1 className="text-xl font-bold text-white">{project.name}</h1>
@@ -49,12 +49,12 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 {project.phase} Phase
               </span>
             </div>
-            <p className="text-xs text-text-muted mt-0.5">{project.description}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{project.description}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs font-mono">
-          <button className="px-3 py-1.5 rounded-xl bg-bg-surface-2 border border-border-subtle text-text-secondary hover:text-white flex items-center gap-1.5">
+          <button className="px-3 py-1.5 rounded-xl bg-muted border border-border text-muted-foreground hover:text-white flex items-center gap-1.5">
             <Share2 className="w-3.5 h-3.5" /> Export Brief
           </button>
           <button className="px-3 py-1.5 rounded-xl bg-status-danger/15 border border-status-danger/40 text-status-danger font-bold flex items-center gap-1.5">
@@ -65,34 +65,34 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
       {/* Project Health Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 font-mono text-xs">
-        <div className="p-3 rounded-xl bg-bg-surface-1 border border-border-subtle">
-          <div className="text-[10px] text-text-muted">Progress</div>
-          <div className="text-base font-bold text-accent-cyan">{project.progressPercentage}%</div>
+        <div className="p-3 rounded-xl bg-popover border border-border">
+          <div className="text-[10px] text-muted-foreground">Progress</div>
+          <div className="text-base font-bold text-foreground">{project.progressPercentage}%</div>
         </div>
-        <div className="p-3 rounded-xl bg-bg-surface-1 border border-border-subtle">
-          <div className="text-[10px] text-text-muted">Health</div>
+        <div className="p-3 rounded-xl bg-popover border border-border">
+          <div className="text-[10px] text-muted-foreground">Health</div>
           <div className="text-base font-bold text-status-success">{project.health}</div>
         </div>
-        <div className="p-3 rounded-xl bg-bg-surface-1 border border-border-subtle">
-          <div className="text-[10px] text-text-muted">Departments</div>
+        <div className="p-3 rounded-xl bg-popover border border-border">
+          <div className="text-[10px] text-muted-foreground">Departments</div>
           <div className="text-base font-bold text-white">{project.activeDepartmentCount} Active</div>
         </div>
-        <div className="p-3 rounded-xl bg-bg-surface-1 border border-border-subtle">
-          <div className="text-[10px] text-text-muted">Agents Assigned</div>
-          <div className="text-base font-bold text-accent-purple">{project.activeAgentCount} Agents</div>
+        <div className="p-3 rounded-xl bg-popover border border-border">
+          <div className="text-[10px] text-muted-foreground">Agents Assigned</div>
+          <div className="text-base font-bold text-muted-foreground">{project.activeAgentCount} Agents</div>
         </div>
-        <div className="p-3 rounded-xl bg-bg-surface-1 border border-border-subtle">
-          <div className="text-[10px] text-text-muted">Today Spend</div>
+        <div className="p-3 rounded-xl bg-popover border border-border">
+          <div className="text-[10px] text-muted-foreground">Today Spend</div>
           <div className="text-base font-bold text-status-warning">${project.todayCostUsd.toFixed(2)}</div>
         </div>
-        <div className="p-3 rounded-xl bg-bg-surface-1 border border-border-subtle">
-          <div className="text-[10px] text-text-muted">Budget Cap</div>
+        <div className="p-3 rounded-xl bg-popover border border-border">
+          <div className="text-[10px] text-muted-foreground">Budget Cap</div>
           <div className="text-base font-bold text-white">${project.totalBudgetUsd.toFixed(2)}</div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-border-subtle text-xs font-mono gap-4">
+      <div className="flex border-b border-border text-xs font-mono gap-4">
         {[
           { id: "overview", label: "Overview" },
           { id: "requirements", label: "Requirements Brief" },
@@ -107,8 +107,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
             onClick={() => setActiveTab(tab.id as any)}
             className={`pb-3 font-medium transition-all ${
               activeTab === tab.id
-                ? "text-accent-cyan border-b-2 border-accent-cyan font-bold"
-                : "text-text-muted hover:text-text-primary"
+                ? "text-foreground border-b-2 border-foreground font-bold"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {tab.label}
@@ -119,37 +119,37 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
       {/* Tab Content Views */}
       {activeTab === "overview" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 p-5 rounded-2xl bg-bg-surface-1 border border-border-subtle space-y-4">
+          <div className="lg:col-span-2 p-5 rounded-2xl bg-popover border border-border space-y-4">
             <h2 className="text-sm font-bold text-white">Project Phase Roadmap</h2>
-            <div className="flex items-center justify-between font-mono text-xs p-4 rounded-xl bg-bg-app border border-border-subtle">
+            <div className="flex items-center justify-between font-mono text-xs p-4 rounded-xl bg-background border border-border">
               {["Idea", "Requirements", "Architecture", "Design", "Development", "QA", "Delivery"].map((phase, idx) => (
-                <div key={idx} className={`flex flex-col items-center gap-1 ${project.phase === phase ? 'text-accent-cyan font-bold' : 'text-text-muted'}`}>
-                  <span className={`w-3 h-3 rounded-full ${project.phase === phase ? 'bg-accent-cyan animate-ping' : 'bg-bg-surface-3'}`} />
+                <div key={idx} className={`flex flex-col items-center gap-1 ${project.phase === phase ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>
+                  <span className={`w-3 h-3 rounded-full ${project.phase === phase ? 'bg-foreground animate-ping' : 'bg-accent'}`} />
                   <span className="text-[10px]">{phase}</span>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-text-secondary leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               This project is currently executing in the {project.phase} phase. Autonomous agents across {project.activeDepartmentCount} departments are actively running tasks and publishing work orders.
             </p>
           </div>
 
-          <div className="p-5 rounded-2xl bg-bg-surface-1 border border-border-subtle space-y-3">
+          <div className="p-5 rounded-2xl bg-popover border border-border space-y-3">
             <h2 className="text-sm font-bold text-white">Project Meta</h2>
-            <div className="font-mono text-xs space-y-2 text-text-secondary">
+            <div className="font-mono text-xs space-y-2 text-muted-foreground">
               <div className="flex justify-between"><span>Owner:</span> <span className="text-white">{project.owner}</span></div>
               <div className="flex justify-between"><span>Status:</span> <span className="text-status-success">{project.status}</span></div>
               <div className="flex justify-between"><span>Pending Approvals:</span> <span className="text-status-warning">{project.pendingApprovalsCount}</span></div>
-              <div className="flex justify-between"><span>Last Updated:</span> <span className="text-text-muted">{project.updatedAt}</span></div>
+              <div className="flex justify-between"><span>Last Updated:</span> <span className="text-muted-foreground">{project.updatedAt}</span></div>
             </div>
           </div>
         </div>
       )}
 
       {activeTab === "requirements" && (
-        <div className="p-5 rounded-2xl bg-bg-surface-1 border border-border-subtle space-y-4">
+        <div className="p-5 rounded-2xl bg-popover border border-border space-y-4">
           <h2 className="text-sm font-bold text-white">Structured Requirement Brief (Verified by Hermes)</h2>
-          <div className="p-4 rounded-xl bg-bg-app border border-border-subtle font-mono text-xs space-y-3 text-text-secondary">
+          <div className="p-4 rounded-xl bg-background border border-border font-mono text-xs space-y-3 text-muted-foreground">
             <div><strong>Project Code:</strong> {project.code}</div>
             <div><strong>Objective:</strong> {project.description}</div>
             <div><strong>Architecture Pattern:</strong> Event-driven microservices + pgvector memory + Redis pub/sub queue.</div>
@@ -162,5 +162,5 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 }
 
 function UnavailableDetail({ entity }: { entity: string }) {
-  return <div className="rounded-2xl border border-dashed border-border-subtle p-10 text-center"><h1 className="text-lg font-semibold text-white">{entity} data unavailable</h1><p className="mt-2 text-sm text-text-muted">Authenticate with a workspace member session to load this record.</p></div>;
+  return <div className="rounded-2xl border border-dashed border-border p-10 text-center"><h1 className="text-lg font-semibold text-white">{entity} data unavailable</h1><p className="mt-2 text-sm text-muted-foreground">Authenticate with a workspace member session to load this record.</p></div>;
 }

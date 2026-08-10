@@ -77,8 +77,8 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 pb-12">
-        <div className="h-24 animate-pulse rounded-2xl border border-border-subtle bg-bg-surface-1" />
-        <div className="h-64 animate-pulse rounded-2xl border border-border-subtle bg-bg-surface-1" />
+        <div className="h-24 animate-pulse rounded-2xl border border-border bg-popover" />
+        <div className="h-64 animate-pulse rounded-2xl border border-border bg-popover" />
       </div>
     );
   }
@@ -93,12 +93,12 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-12">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border-subtle pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-3">
-          <Link href="/agents" className="rounded-xl border border-border-subtle bg-bg-surface-2 p-2 text-text-muted hover:text-white">
+          <Link href="/agents" className="rounded-xl border border-border bg-muted p-2 text-muted-foreground hover:text-white">
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-accent-cyan/30 bg-accent-cyan/15 text-accent-cyan">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-foreground/30 bg-foreground/15 text-foreground">
             <Bot className="h-6 w-6" />
           </div>
           <div>
@@ -106,14 +106,14 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
               <h1 className="text-xl font-bold text-white">{agent.display_name}</h1>
               <span className="rounded bg-status-warning/20 px-2.5 py-0.5 font-mono text-xs text-status-warning">{agent.status}</span>
             </div>
-            <p className="mt-0.5 text-xs text-text-muted">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               {agent.agent_class} · v{agent.version} · <span className="font-mono">{agent.name}</span>
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex gap-4 overflow-x-auto border-b border-border-subtle font-mono text-xs">
+      <div className="flex gap-4 overflow-x-auto border-b border-border font-mono text-xs">
         {[
           { id: "overview" as const, label: "Overview" },
           { id: "contract" as const, label: "Definition" },
@@ -124,7 +124,7 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`whitespace-nowrap pb-3 font-medium transition-all ${
-              activeTab === tab.id ? "border-b-2 border-accent-cyan font-bold text-accent-cyan" : "text-text-muted hover:text-text-primary"
+              activeTab === tab.id ? "border-b-2 border-foreground font-bold text-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {tab.label}
@@ -134,21 +134,21 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
 
       {activeTab === "overview" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-4 rounded-2xl border border-border-subtle bg-bg-surface-1 p-5 lg:col-span-2">
+          <div className="space-y-4 rounded-2xl border border-border bg-popover p-5 lg:col-span-2">
             <h2 className="text-sm font-bold text-white">Purpose &amp; priority</h2>
-            <p className="text-xs leading-6 text-text-primary">{agent.purpose}</p>
-            <div className="rounded-xl border border-border-subtle bg-bg-app p-3 text-xs text-text-secondary">
-              <span className="font-semibold text-accent-cyan">First priority:</span> {agent.first_priority}
+            <p className="text-xs leading-6 text-foreground">{agent.purpose}</p>
+            <div className="rounded-xl border border-border bg-background p-3 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">First priority:</span> {agent.first_priority}
             </div>
-            {agent.description && <p className="text-xs leading-6 text-text-muted">{agent.description}</p>}
+            {agent.description && <p className="text-xs leading-6 text-muted-foreground">{agent.description}</p>}
             <ListSection title="Responsibilities" items={agent.responsibilities} />
             <ListSection title="Prohibited actions" items={agent.prohibited_actions} empty="None specified." />
             <ListSection title="Definition of done" items={agent.definition_of_done} />
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-border-subtle bg-bg-surface-1 p-5 font-mono text-xs">
+          <div className="space-y-3 rounded-2xl border border-border bg-popover p-5 font-mono text-xs">
             <h2 className="font-sans text-sm font-bold text-white">Policy</h2>
-            <div className="space-y-2 text-text-secondary">
+            <div className="space-y-2 text-muted-foreground">
               <div>Reports to: {agent.reports_to ?? "—"}</div>
               <div>Allowed tools: {agent.allowed_tools.length ? agent.allowed_tools.join(", ") : "none configured"}</div>
               <div>Forbidden tools: {agent.forbidden_tools.length ? agent.forbidden_tools.join(", ") : "none configured"}</div>
@@ -161,9 +161,9 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
       )}
 
       {activeTab === "contract" && (
-        <div className="space-y-3 rounded-2xl border border-border-subtle bg-bg-surface-1 p-5 font-mono text-xs">
+        <div className="space-y-3 rounded-2xl border border-border bg-popover p-5 font-mono text-xs">
           <h2 className="font-sans text-sm font-bold text-white">Real stored definition</h2>
-          <pre className="overflow-x-auto rounded-xl border border-border-subtle bg-bg-app p-4 text-accent-cyan">{JSON.stringify(agent, null, 2)}</pre>
+          <pre className="overflow-x-auto rounded-xl border border-border bg-background p-4 text-foreground">{JSON.stringify(agent, null, 2)}</pre>
         </div>
       )}
 
@@ -189,16 +189,16 @@ function ListSection({ title, items, empty }: { title: string; items: string[]; 
     <div>
       <h3 className="mb-1.5 text-xs font-semibold text-white">{title}</h3>
       {items.length ? (
-        <ul className="space-y-1 text-xs text-text-secondary">
+        <ul className="space-y-1 text-xs text-muted-foreground">
           {items.map((item, i) => (
             <li key={i} className="flex gap-2">
-              <span className="text-accent-cyan">•</span>
+              <span className="text-foreground">•</span>
               {item}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-text-muted">{empty ?? "None."}</p>
+        <p className="text-xs text-muted-foreground">{empty ?? "None."}</p>
       )}
     </div>
   );

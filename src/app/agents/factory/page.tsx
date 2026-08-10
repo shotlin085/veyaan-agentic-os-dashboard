@@ -100,9 +100,9 @@ export default function AgentFactoryPage() {
         <div className="rounded-2xl border border-status-success/30 bg-status-success/10 p-6 text-center">
           <CheckCircle2 className="mx-auto h-8 w-8 text-status-success" />
           <h2 className="mt-3 text-sm font-semibold text-white">Agent created</h2>
-          <p className="mt-1 text-xs text-text-muted">&quot;{created.displayName}&quot; now exists as a real agent definition in this workspace.</p>
-          <p className="mt-1 font-mono text-[11px] text-text-muted">{created.id}</p>
-          <button onClick={() => router.push("/agents")} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-accent-cyan px-4 py-2 text-xs font-semibold text-bg-app">
+          <p className="mt-1 text-xs text-muted-foreground">&quot;{created.displayName}&quot; now exists as a real agent definition in this workspace.</p>
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground">{created.id}</p>
+          <button onClick={() => router.push("/agents")} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background">
             View agents <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -112,31 +112,31 @@ export default function AgentFactoryPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12">
-      <div className="border-b border-border-subtle pb-4">
+      <div className="border-b border-border pb-4">
         <h1 className="flex items-center gap-2 text-xl font-bold text-white">
-          <Sparkles className="h-5 w-5 text-accent-purple" />
+          <Sparkles className="h-5 w-5 text-muted-foreground" />
           Create an agent
         </h1>
-        <p className="mt-1 text-xs text-text-muted">
+        <p className="mt-1 text-xs text-muted-foreground">
           Real agent definitions, persisted in Hermes — not a preview. Submitting creates an actual record you&apos;ll see on the Agents page.
         </p>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-border-subtle bg-bg-surface-1 p-4 font-mono text-xs">
+      <div className="flex items-center justify-between rounded-xl border border-border bg-popover p-4 font-mono text-xs">
         {[
           { step: 1, label: "1. Identity" },
           { step: 2, label: "2. Responsibilities" },
           { step: 3, label: "3. Definition of done" },
           { step: 4, label: "4. Review" },
         ].map((s) => (
-          <div key={s.step} className={`flex items-center gap-2 ${step >= s.step ? "font-bold text-accent-cyan" : "text-text-muted"}`}>
-            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${step >= s.step ? "bg-accent-cyan text-bg-app" : "bg-bg-surface-3"}`}>{s.step}</span>
+          <div key={s.step} className={`flex items-center gap-2 ${step >= s.step ? "font-bold text-foreground" : "text-muted-foreground"}`}>
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${step >= s.step ? "bg-foreground text-background" : "bg-accent"}`}>{s.step}</span>
             <span>{s.label}</span>
           </div>
         ))}
       </div>
 
-      <div className="space-y-5 rounded-2xl border border-border-subtle bg-bg-surface-1 p-6">
+      <div className="space-y-5 rounded-2xl border border-border bg-popover p-6">
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-white">Identity &amp; purpose</h2>
@@ -199,15 +199,15 @@ export default function AgentFactoryPage() {
           </div>
         )}
 
-        <div className="flex justify-between border-t border-border-subtle pt-4">
-          <button disabled={step === 1} onClick={() => setStep(step - 1)} className="rounded-lg border border-border-subtle bg-bg-surface-2 px-4 py-2 text-xs text-text-secondary disabled:opacity-40">
+        <div className="flex justify-between border-t border-border pt-4">
+          <button disabled={step === 1} onClick={() => setStep(step - 1)} className="rounded-lg border border-border bg-muted px-4 py-2 text-xs text-muted-foreground disabled:opacity-40">
             Back
           </button>
           {step < 4 ? (
             <button
               disabled={(step === 1 && !canAdvanceFromStep1) || (step === 2 && !canAdvanceFromStep2)}
               onClick={() => setStep(Math.min(4, step + 1))}
-              className="flex items-center gap-2 rounded-lg bg-accent-purple px-5 py-2 text-xs font-bold text-white shadow-purpleGlow disabled:opacity-40"
+              className="flex items-center gap-2 rounded-lg bg-muted-foreground px-5 py-2 text-xs font-bold text-white disabled:opacity-40"
             >
               <span>Next</span>
               <ArrowRight className="h-4 w-4" />
@@ -216,7 +216,7 @@ export default function AgentFactoryPage() {
             <button
               disabled={!canSubmit || submitting}
               onClick={() => void submit()}
-              className="flex items-center gap-2 rounded-lg bg-accent-purple px-5 py-2 text-xs font-bold text-white shadow-purpleGlow disabled:opacity-40"
+              className="flex items-center gap-2 rounded-lg bg-muted-foreground px-5 py-2 text-xs font-bold text-white disabled:opacity-40"
             >
               <span>{submitting ? "Creating…" : "Create agent"}</span>
               <ArrowRight className="h-4 w-4" />
@@ -228,12 +228,12 @@ export default function AgentFactoryPage() {
   );
 }
 
-const inputClass = "w-full rounded-lg border border-border-subtle bg-bg-app p-2.5 text-xs text-text-primary focus:border-accent-cyan focus:outline-none";
+const inputClass = "w-full rounded-lg border border-border bg-background p-2.5 text-xs text-foreground focus:border-foreground focus:outline-none";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1 block text-xs text-text-muted">{label}</label>
+      <label className="mb-1 block text-xs text-muted-foreground">{label}</label>
       {children}
     </div>
   );
@@ -241,9 +241,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4 border-b border-border-subtle/60 pb-2">
-      <dt className="shrink-0 text-text-muted">{label}</dt>
-      <dd className="text-right text-text-primary">{value || "—"}</dd>
+    <div className="flex justify-between gap-4 border-b border-border/60 pb-2">
+      <dt className="shrink-0 text-muted-foreground">{label}</dt>
+      <dd className="text-right text-foreground">{value || "—"}</dd>
     </div>
   );
 }

@@ -16,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-bg-app text-text-primary antialiased">
+      <body className="bg-background text-foreground antialiased">
         <AuthProvider><WorkspaceProvider><AppShell>{children}</AppShell></WorkspaceProvider></AuthProvider>
       </body>
     </html>
