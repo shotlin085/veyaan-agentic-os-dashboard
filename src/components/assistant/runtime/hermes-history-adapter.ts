@@ -35,13 +35,18 @@ function hermesTurnCustom(turn: HermesTurn): { usage?: HermesUsage; route?: Herm
   // your-own-key turn (app/providers/); model itself may contain ":",
   // so split into at most 3 parts rather than assuming none does.
   const customMatch = /^custom:([^:]+):(.+)$/.exec(turn.model_used);
+  // "direct:{model}" - _run_direct_openrouter_path's encoding for a real
+  // OpenRouter model called directly (reasoning-effort path).
+  const directMatch = /^direct:(.+)$/.exec(turn.model_used);
   const route: HermesRoute = customMatch
     ? { path: "custom", providerId: customMatch[1], model: customMatch[2] }
-    : turn.model_used === "openrouter/free"
-      ? { path: "fast", model: turn.model_used }
-      : turn.model_used === "hermes-agent"
-        ? { path: "escalated", model: turn.model_used }
-        : { path: "model", model: turn.model_used };
+    : directMatch
+      ? { path: "direct", model: directMatch[1] }
+      : turn.model_used === "openrouter/free"
+        ? { path: "fast", model: turn.model_used }
+        : turn.model_used === "hermes-agent"
+          ? { path: "escalated", model: turn.model_used }
+          : { path: "model", model: turn.model_used };
   const usage: HermesUsage | undefined = turn.tokens_used
     ? {
         promptTokens: turn.tokens_used.prompt ?? undefined,
@@ -50,6 +55,7 @@ function hermesTurnCustom(turn: HermesTurn): { usage?: HermesUsage; route?: Herm
           turn.tokens_used.prompt != null && turn.tokens_used.completion != null
             ? turn.tokens_used.prompt + turn.tokens_used.completion
             : undefined,
+        reasoningTokens: turn.tokens_used.reasoning ?? undefined,
       }
     : undefined;
   return { usage, route, plan: turn.meta?.plan ?? undefined };

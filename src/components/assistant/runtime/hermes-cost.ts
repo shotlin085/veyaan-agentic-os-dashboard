@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { HermesModel } from "./hermes-models";
 import type { CustomProvider } from "./hermes-providers";
+import type { ReasoningModel } from "./hermes-reasoning-models";
 import type { HermesRoute, HermesUsage } from "./hermes-adapter";
 
 interface UseUsdToInrResult {
@@ -84,6 +85,10 @@ function parseUsdPrice(price: string | null): number | null {
  *    pricing, so cost is honestly unavailable here too (real input/
  *    output token counts are still shown - see ResponseMeta's "in"/"out"
  *    stats, which come from `usage` directly, not from this function).
+ *  - "direct": a real OpenRouter model called directly (reasoning-effort
+ *    path, bypassing hermes-agent) - real per-token pricing exists, same
+ *    as "model", just sourced from useReasoningModels() instead of the
+ *    Hermes catalog.
  */
 export function computeTurnCost(
   route: HermesRoute | undefined,
@@ -91,6 +96,7 @@ export function computeTurnCost(
   models: readonly HermesModel[],
   usdToInr: number | null,
   customProviders: readonly CustomProvider[] = [],
+  reasoningModels: readonly ReasoningModel[] = [],
 ): TurnCost {
   if (!route?.path) {
     return { provider: "—", modelLabel: "—", usdCost: null, inrCost: null, unavailableReason: "No route information yet." };
@@ -118,6 +124,28 @@ export function computeTurnCost(
       usdCost: null,
       inrCost: null,
       unavailableReason: "This provider's API doesn't publish per-token pricing.",
+    };
+  }
+
+  if (route.path === "direct") {
+    const reasoningEntry = reasoningModels.find((m) => m.id === route.model);
+    if (!reasoningEntry) {
+      return { provider: "OpenRouter", modelLabel: route.model ?? "—", usdCost: null, inrCost: null, unavailableReason: "Model catalog still loading." };
+    }
+    const inputPrice = parseUsdPrice(reasoningEntry.inputPrice);
+    const outputPrice = parseUsdPrice(reasoningEntry.outputPrice);
+    if (inputPrice === null || outputPrice === null || !usage) {
+      return { provider: reasoningEntry.provider, modelLabel: reasoningEntry.name, usdCost: null, inrCost: null, unavailableReason: "Waiting for usage data." };
+    }
+    const usdCost =
+      ((usage.promptTokens ?? 0) / PRICE_PER_MILLION) * inputPrice +
+      ((usage.completionTokens ?? 0) / PRICE_PER_MILLION) * outputPrice;
+    return {
+      provider: reasoningEntry.provider,
+      modelLabel: reasoningEntry.name,
+      usdCost,
+      inrCost: usdToInr !== null ? usdCost * usdToInr : null,
+      unavailableReason: usdToInr === null ? "Exchange rate still loading." : null,
     };
   }
 

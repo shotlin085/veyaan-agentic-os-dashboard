@@ -17,6 +17,7 @@ import {
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
+  BrainIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -47,6 +48,7 @@ import { MessageTiming } from "@/components/elements/message-timing";
 import { CostMeter } from "@/components/elements/cost-meter";
 import { AgentPlan } from "@/components/elements/agent-plan";
 import { TodoList } from "@/components/elements/todo-list";
+import { ReasoningEffort } from "@/components/elements/reasoning-effort";
 import {
   ComposerActions,
   ComposerAttachButton,
@@ -62,6 +64,7 @@ import {
 } from "@/components/elements/composer";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
+import { useReasoningModels } from "@/components/assistant/runtime/hermes-reasoning-models";
 import { useProviders } from "@/components/assistant/runtime/hermes-providers";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
@@ -651,6 +654,7 @@ const Composer: FC = () => {
           <ComposerActions>
             <ModelPickerButton />
             <PlanToggleButton />
+            <ReasoningEffortButton />
             <SessionCostButton />
             <DictationButton />
             <ComposerSendAction />
@@ -673,11 +677,15 @@ const ModelPickerButton: FC = () => {
   const aui = useAui();
   const { models, loading } = useHermesModels();
   const { providers } = useProviders();
+  const { models: reasoningModels, loading: reasoningLoading } = useReasoningModels();
   const selectedId = useAuiState((s) => (s.composer.runConfig.custom?.model as string | undefined) ?? "");
   const selectedProviderId = useAuiState((s) => (s.composer.runConfig.custom?.providerId as string | undefined) ?? "");
-  const selectedModel = selectedProviderId
-    ? { name: selectedId, provider: providers.find((p) => p.id === selectedProviderId)?.name ?? "" }
-    : models.find((m) => m.id === selectedId);
+  const selectedDirectModelId = useAuiState((s) => (s.composer.runConfig.custom?.directModel as string | undefined) ?? "");
+  const selectedModel = selectedDirectModelId
+    ? reasoningModels.find((m) => m.id === selectedDirectModelId)
+    : selectedProviderId
+      ? { name: selectedId, provider: providers.find((p) => p.id === selectedProviderId)?.name ?? "" }
+      : models.find((m) => m.id === selectedId);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -706,7 +714,7 @@ const ModelPickerButton: FC = () => {
       />
       <ComposerMenu open={open} align="start" className="max-h-96 overflow-y-auto">
         <ComposerMenuItem
-          active={!selectedId}
+          active={!selectedId && !selectedDirectModelId}
           onClick={() => {
             aui.composer.setRunConfig({ custom: {} });
             setOpen(false);
@@ -714,7 +722,7 @@ const ModelPickerButton: FC = () => {
         >
           <span className="flex-1 text-start">Auto</span>
           <span className={cn(mono, "text-foreground/35")}>fast + research</span>
-          {!selectedId && <CheckIcon className="size-3.5" />}
+          {!selectedId && !selectedDirectModelId && <CheckIcon className="size-3.5" />}
         </ComposerMenuItem>
         {loading && <div className={cn(mono, "text-foreground/35 px-2.5 py-2")}>Loading models...</div>}
         {models.map((model) => (
@@ -752,6 +760,30 @@ const ModelPickerButton: FC = () => {
             </ComposerMenuItem>
           )),
         )}
+        {(reasoningLoading || reasoningModels.length > 0) && (
+          <div className={cn(mono, "text-foreground/25 px-2.5 pb-1 pt-2")}>direct · reasoning</div>
+        )}
+        {reasoningLoading && <div className={cn(mono, "text-foreground/35 px-2.5 py-2")}>Loading models...</div>}
+        {reasoningModels.map((model) => (
+          <ComposerMenuItem
+            key={model.id}
+            active={model.id === selectedDirectModelId}
+            onClick={() => {
+              // Reasoning effort defaults to "medium" the moment a direct
+              // model is picked, rather than left unset - PlanToggleButton's
+              // sibling, ReasoningEffortButton, only renders once
+              // directModel is set, so there's no separate "turn on
+              // reasoning" step to remember.
+              aui.composer.setRunConfig({ custom: { directModel: model.id, reasoningEffort: "medium" } });
+              setOpen(false);
+            }}
+          >
+            <ProviderLogo provider={model.provider} className="size-3.5 shrink-0" />
+            <span className="flex-1 truncate text-start">{model.name}</span>
+            <span className={cn(mono, "text-foreground/35 tabular-nums")}>{model.inputPrice ?? ""}</span>
+            {model.id === selectedDirectModelId && <CheckIcon className="size-3.5 shrink-0" />}
+          </ComposerMenuItem>
+        ))}
       </ComposerMenu>
     </div>
   );
@@ -808,6 +840,7 @@ const SessionCostButton: FC = () => {
   const messages = useAuiState((s) => s.thread.messages);
   const { models } = useHermesModels();
   const { providers } = useProviders();
+  const { models: reasoningModelsForCost } = useReasoningModels();
   const { rate: usdToInr } = useUsdToInr();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -841,7 +874,7 @@ const SessionCostButton: FC = () => {
     if (message.role !== "assistant") continue;
     const custom = message.metadata.custom as { usage?: HermesUsage; route?: HermesRoute } | undefined;
     if (!custom?.route) continue;
-    const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr, providers);
+    const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr, providers, reasoningModelsForCost);
     if (cost.usdCost === null) continue;
     sessionUsd += cost.usdCost;
     lastTurnUsd = cost.usdCost;
@@ -880,6 +913,90 @@ const SessionCostButton: FC = () => {
             runCost={lastTurnUsd !== null ? formatInr(usdToInr !== null ? lastTurnUsd * usdToInr : null) : "—"}
             sessionCost={formatInr(usdToInr !== null ? sessionUsd * usdToInr : null)}
             lines={lines}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Approximate reference points for each effort tier, not a hard cap -
+// OpenRouter's effort-level form ("low"/"medium"/"high") doesn't guarantee
+// an exact token count the way its max_tokens form would. These are only
+// used to size the progress bar in the ReasoningEffort element.
+const REASONING_EFFORT_LEVELS = [
+  { key: "low", label: "Low", budget: 1024 },
+  { key: "medium", label: "Medium", budget: 4096 },
+  { key: "high", label: "High", budget: 16384 },
+];
+
+/**
+ * Real reasoning-effort control - only renders once a direct OpenRouter
+ * model is selected (ModelPickerButton's "direct · reasoning" section),
+ * since that's the only path that can honor it (hermes-agent has no
+ * reasoning/effort concept at all, confirmed live against its own
+ * /capabilities). `spent` is real cumulative reasoning tokens across this
+ * session's direct-path replies (usage.completion_tokens_details.
+ * reasoning_tokens, confirmed live against OpenRouter), derived the same
+ * "re-scan thread.messages every render" way SessionCostButton computes
+ * session cost, not a separate accumulator that could drift.
+ */
+const ReasoningEffortButton: FC = () => {
+  const aui = useAui();
+  const messages = useAuiState((s) => s.thread.messages);
+  const runConfigCustom = useAuiState((s) => s.composer.runConfig.custom);
+  const directModel = typeof runConfigCustom?.directModel === "string" ? runConfigCustom.directModel : undefined;
+  const selectedKey = typeof runConfigCustom?.reasoningEffort === "string" ? runConfigCustom.reasoningEffort : "medium";
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  let spent = 0;
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    const custom = message.metadata.custom as { usage?: HermesUsage; route?: HermesRoute } | undefined;
+    if (custom?.route?.path !== "direct") continue;
+    spent += custom.usage?.reasoningTokens ?? 0;
+  }
+
+  if (!directModel) return null;
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-label="Reasoning effort"
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "text-foreground/55 hover:bg-foreground/[0.06] hover:text-foreground/90 dark:hover:bg-foreground/[0.09] flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] transition-colors",
+        )}
+      >
+        <BrainIcon className="size-3.5" />
+        {REASONING_EFFORT_LEVELS.find((level) => level.key === selectedKey)?.label ?? "Medium"}
+      </button>
+      {open && (
+        <div className="absolute bottom-full end-0 z-10 mb-2">
+          <ReasoningEffort
+            levels={REASONING_EFFORT_LEVELS}
+            selectedKey={selectedKey}
+            spent={spent}
+            onSelect={(key) => aui.composer.setRunConfig({ custom: { ...runConfigCustom, reasoningEffort: key } })}
+            className="w-72 rounded-2xl border border-border bg-popover p-4 shadow-lg"
           />
         </div>
       )}

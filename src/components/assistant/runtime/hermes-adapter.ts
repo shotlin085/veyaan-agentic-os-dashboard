@@ -10,8 +10,14 @@ type HermesStreamEvent =
   | { event: "assistant.token.delta"; content?: string }
   | { event: "assistant.message.completed"; content?: string; finish_reason?: string | null }
   | { event: "runtime.failed"; error?: string }
-  | { event: "assistant.usage"; prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-  | { event: "assistant.route"; path?: "fast" | "escalated" | "model" | "custom"; model?: string; provider_id?: string }
+  | {
+      event: "assistant.usage";
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+      reasoning_tokens?: number;
+    }
+  | { event: "assistant.route"; path?: "fast" | "escalated" | "model" | "custom" | "direct"; model?: string; provider_id?: string }
   | {
       event: "assistant.tool.progress";
       tool?: string;
@@ -50,10 +56,15 @@ export interface HermesUsage {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  /** Real tokens spent on reasoning (usage.completion_tokens_details.
+   * reasoning_tokens, confirmed live against OpenRouter) - only ever set
+   * on the "direct" route, since hermes-agent has no reasoning concept to
+   * report. */
+  reasoningTokens?: number;
 }
 
 export interface HermesRoute {
-  path?: "fast" | "escalated" | "model" | "custom";
+  path?: "fast" | "escalated" | "model" | "custom" | "direct";
   model?: string;
   providerId?: string;
 }
@@ -103,6 +114,14 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       // plan-then-execute mode (SendMessageRequest.plan on the backend),
       // not a client-side simulation.
       const plan = runConfig.custom?.plan === true;
+      // Set via the composer's direct-model picker (bindings/Thread.tsx) -
+      // a real OpenRouter model id from useReasoningModels(), bypassing
+      // hermes-agent entirely (SendMessageRequest.direct_model). Distinct
+      // from `model` above, which locks a hermes-agent session instead.
+      const directModel = typeof runConfig.custom?.directModel === "string" ? runConfig.custom.directModel : undefined;
+      // Only meaningful alongside directModel - forwarded as-is, the
+      // backend already validates it's one of "low"|"medium"|"high".
+      const reasoningEffort = typeof runConfig.custom?.reasoningEffort === "string" ? runConfig.custom.reasoningEffort : undefined;
 
       if (!config.workspaceId || !config.conversationId || !config.token) {
         yield {
@@ -122,6 +141,8 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
           model,
           providerId,
           plan,
+          directModel,
+          reasoningEffort,
         }),
         signal: abortSignal,
       }).catch(() => null);
@@ -232,6 +253,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
                   promptTokens: parsed.prompt_tokens,
                   completionTokens: parsed.completion_tokens,
                   totalTokens: parsed.total_tokens,
+                  reasoningTokens: parsed.reasoning_tokens,
                 };
                 break;
               case "assistant.route":

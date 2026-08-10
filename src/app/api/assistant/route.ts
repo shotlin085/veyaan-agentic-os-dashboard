@@ -4,7 +4,7 @@ import { assistantGatewayUrl, bearerAuthorization } from "@/lib/server/assistant
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null) as { workspaceId?: string; conversationId?: string; content?: string; model?: string; providerId?: string; plan?: boolean } | null;
+  const body = await request.json().catch(() => null) as { workspaceId?: string; conversationId?: string; content?: string; model?: string; providerId?: string; plan?: boolean; directModel?: string; reasoningEffort?: string } | null;
   const authorization = bearerAuthorization(request);
 
   if (!body?.workspaceId || !body.conversationId || !body.content?.trim()) {
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const upstream = await fetch(assistantGatewayUrl(`/workspaces/${encodeURIComponent(body.workspaceId)}/conversations/${encodeURIComponent(body.conversationId)}/messages`), {
     method: "POST",
     headers: { authorization, "content-type": "application/json", accept: "text/event-stream" },
-    body: JSON.stringify({ content: body.content, model: body.model, provider_id: body.providerId, plan: body.plan }),
+    body: JSON.stringify({ content: body.content, model: body.model, provider_id: body.providerId, plan: body.plan, direct_model: body.directModel, reasoning_effort: body.reasoningEffort }),
     cache: "no-store",
     signal: AbortSignal.any([request.signal, AbortSignal.timeout(body.plan ? 600_000 : 120_000)]),
   }).catch(() => null);
