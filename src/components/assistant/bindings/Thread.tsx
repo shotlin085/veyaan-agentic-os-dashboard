@@ -12,6 +12,7 @@ import {
   ThreadPrimitive,
   useAui,
   useAuiState,
+  useMessageTiming,
   type ToolCallMessagePartProps,
 } from "@assistant-ui/react";
 import {
@@ -41,6 +42,8 @@ import { ErrorState as ErrorStateCard } from "@/components/elements/error-state"
 import { ToolCall } from "@/components/elements/tool-call";
 import { StoppedRun } from "@/components/elements/stopped-run";
 import { MessageQueue } from "@/components/elements/message-queue";
+import { MessageTiming } from "@/components/elements/message-timing";
+import { CostMeter } from "@/components/elements/cost-meter";
 import {
   ComposerActions,
   ComposerAttachButton,
@@ -55,6 +58,8 @@ import {
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
+import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
+import type { HermesRoute, HermesUsage } from "@/components/assistant/runtime/hermes-adapter";
 
 const STARTER_PROMPTS = [
   "What can you help me with?",
@@ -297,6 +302,40 @@ const EditComposer: FC = () => {
   );
 };
 
+/**
+ * Real per-response provider/model/time/cost, not decoration - built from
+ * the real assistant.route + assistant.usage SSE events (hermes-adapter.ts)
+ * or, for history loaded after a refresh, the same real model_used/
+ * tokens_used a completed turn was persisted with (hermes-history-
+ * adapter.ts). Renders nothing until real route data exists - no
+ * placeholder skeleton, matching this app's "don't fake it" rule.
+ */
+const ResponseMeta: FC = () => {
+  const { models } = useHermesModels();
+  const { rate: usdToInr } = useUsdToInr();
+  const timing = useMessageTiming();
+  const streaming = useAuiState((s) => s.message.status?.type === "running");
+  const custom = useAuiState((s) =>
+    s.message.role === "assistant"
+      ? (s.message.metadata.custom as { usage?: HermesUsage; route?: HermesRoute } | undefined)
+      : undefined,
+  );
+
+  if (!custom?.route) return null;
+  const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr);
+  const costValue = cost.usdCost === 0 ? "Free" : cost.inrCost !== null ? formatInr(cost.inrCost) : "—";
+
+  const stats = [
+    { label: "via", value: cost.provider },
+    ...(cost.modelLabel !== "—" ? [{ label: "model", value: cost.modelLabel }] : []),
+    ...(timing?.totalStreamTime ? [{ label: "time", value: `${(timing.totalStreamTime / 1000).toFixed(1)}s` }] : []),
+    ...(timing?.tokensPerSecond ? [{ label: "speed", value: `${timing.tokensPerSecond.toFixed(0)} tok/s` }] : []),
+    { label: "cost", value: costValue },
+  ];
+
+  return <MessageTiming stats={stats} streaming={streaming} />;
+};
+
 const AssistantMessage: FC = () => {
   const [dismissed, setDismissed] = useState(false);
   const isEmptyRunning = useAuiState((s) => {
@@ -344,6 +383,7 @@ const AssistantMessage: FC = () => {
             </ErrorPrimitive.Root>
           </MessagePrimitive.Error>
         )}
+        {!isCancelled && !isEmptyRunning && <ResponseMeta />}
       </div>
       <div className="flex items-center gap-1 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
         <AssistantActionBar />
@@ -501,6 +541,7 @@ const Composer: FC = () => {
           <ComposerAttachButton title="File attachments aren't supported by Hermes yet" />
           <ComposerActions>
             <ModelPickerButton />
+            <SessionCostButton />
             <DictationButton />
             <ComposerSendAction />
           </ComposerActions>
@@ -580,6 +621,101 @@ const ModelPickerButton: FC = () => {
           </ComposerMenuItem>
         ))}
       </ComposerMenu>
+    </div>
+  );
+};
+
+/**
+ * Real running session cost in INR - derived fresh from the thread's own
+ * message list (each completed assistant message's metadata.custom.
+ * {usage,route}, see hermes-adapter.ts/hermes-history-adapter.ts) rather
+ * than a separately-tracked accumulator, so it can never drift out of
+ * sync with what actually happened. "Session" means this browser tab's
+ * runtime: it re-derives from full history on every render, so it's
+ * complete for anything the history adapter loaded, not just turns sent
+ * since the page opened. Turns with unknown pricing (the escalated/
+ * research-agent path) are excluded from the total rather than counted
+ * as free - see computeTurnCost's docstring. Renders nothing until at
+ * least one turn has real cost data.
+ */
+const SessionCostButton: FC = () => {
+  const messages = useAuiState((s) => s.thread.messages);
+  const { models } = useHermesModels();
+  const { rate: usdToInr } = useUsdToInr();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  // Derived here in the component body from the stable `messages` array
+  // reference, not inside the useAuiState selector above - constructing
+  // new arrays/objects inside a useAuiState selector breaks
+  // useSyncExternalStore (see StoppedRunBlock elsewhere in this file for
+  // the bug this exact pattern caused once already).
+  const perModel = new Map<string, { inputTokens: number; outputTokens: number; usdCost: number }>();
+  let sessionUsd = 0;
+  let lastTurnUsd: number | null = null;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    const custom = message.metadata.custom as { usage?: HermesUsage; route?: HermesRoute } | undefined;
+    if (!custom?.route) continue;
+    const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr);
+    if (cost.usdCost === null) continue;
+    sessionUsd += cost.usdCost;
+    lastTurnUsd = cost.usdCost;
+    const existing = perModel.get(cost.modelLabel) ?? { inputTokens: 0, outputTokens: 0, usdCost: 0 };
+    existing.inputTokens += custom.usage?.promptTokens ?? 0;
+    existing.outputTokens += custom.usage?.completionTokens ?? 0;
+    existing.usdCost += cost.usdCost;
+    perModel.set(cost.modelLabel, existing);
+  }
+
+  if (perModel.size === 0) return null;
+
+  const lines = Array.from(perModel.entries()).map(([model, entry]) => ({
+    model,
+    inputTokens: entry.inputTokens,
+    outputTokens: entry.outputTokens,
+    cost: formatInr(usdToInr !== null ? entry.usdCost * usdToInr : null),
+    share: sessionUsd > 0 ? entry.usdCost / sessionUsd : 0,
+  }));
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "text-foreground/55 hover:bg-foreground/[0.06] hover:text-foreground/90 dark:hover:bg-foreground/[0.09] flex h-8 items-center gap-1 rounded-full px-3 text-[12.5px] transition-colors",
+          mono,
+        )}
+      >
+        {formatInr(usdToInr !== null ? sessionUsd * usdToInr : null)}
+      </button>
+      {open && (
+        <div className="absolute bottom-full end-0 z-10 mb-2">
+          <CostMeter
+            runCost={lastTurnUsd !== null ? formatInr(usdToInr !== null ? lastTurnUsd * usdToInr : null) : "—"}
+            sessionCost={formatInr(usdToInr !== null ? sessionUsd * usdToInr : null)}
+            lines={lines}
+          />
+        </div>
+      )}
     </div>
   );
 };

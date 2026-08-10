@@ -1,4 +1,4 @@
-import type { ChatModelAdapter, ThreadAssistantMessagePart, ThreadMessage } from "@assistant-ui/react";
+import type { ChatModelAdapter, MessageTiming, ThreadAssistantMessagePart, ThreadMessage } from "@assistant-ui/react";
 
 /**
  * The orchestrator's SSE frames carry no `event:` line - every line is
@@ -115,6 +115,28 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       let errored = false;
       const toolCalls = new Map<string, ToolCallState>();
 
+      // Real wall-clock timing, not estimated - streamStartTime/firstTokenTime
+      // are captured as the SSE frames actually arrive over the network, so
+      // "model time" in the UI reflects the real request, not a guess.
+      const streamStartTime = Date.now();
+      let firstTokenTime: number | undefined;
+      let totalChunks = 0;
+      const buildTiming = (): MessageTiming => {
+        const now = Date.now();
+        return {
+          streamStartTime,
+          firstTokenTime,
+          totalStreamTime: finished ? now - streamStartTime : undefined,
+          tokenCount: usage?.completionTokens,
+          tokensPerSecond:
+            finished && usage?.completionTokens && now > streamStartTime
+              ? usage.completionTokens / ((now - streamStartTime) / 1000)
+              : undefined,
+          totalChunks,
+          toolCallCount: toolCalls.size,
+        };
+      };
+
       const buildToolParts = (): ThreadAssistantMessagePart[] =>
         Array.from(toolCalls.values()).map((call) => ({
           type: "tool-call",
@@ -147,6 +169,8 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
 
             switch (parsed.event) {
               case "assistant.token.delta":
+                if (firstTokenTime === undefined) firstTokenTime = Date.now();
+                totalChunks += 1;
                 accumulated += parsed.content ?? "";
                 break;
               case "assistant.message.completed":
@@ -202,7 +226,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
             yield {
               content: [...buildToolParts(), { type: "text", text: accumulated }],
               status,
-              metadata: { custom: { usage, route } },
+              metadata: { custom: { usage, route }, timing: buildTiming() },
             };
           }
 
@@ -219,7 +243,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
         yield {
           content: [...buildToolParts(), { type: "text", text: accumulated }],
           status: { type: "incomplete", reason: "cancelled" },
-          metadata: { custom: { usage, route } },
+          metadata: { custom: { usage, route }, timing: buildTiming() },
         };
         return;
       }

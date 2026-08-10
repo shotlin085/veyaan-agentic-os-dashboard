@@ -1,6 +1,7 @@
 "use client";
 
 import { ExportedMessageRepository, type ThreadHistoryAdapter } from "@assistant-ui/react";
+import type { HermesRoute, HermesUsage } from "./hermes-adapter";
 
 interface HermesTurn {
   id: string;
@@ -16,6 +17,33 @@ export interface HermesHistoryConfig {
   workspaceId: string;
   conversationId: string;
   token: string;
+}
+
+/** Infers the same {path, model} shape the live SSE assistant.route event
+ * carries, from the model_used string a completed turn was persisted with -
+ * the mapping mirrors streaming_routes.py's own real constants
+ * (FAST_PATH_MODEL="openrouter/free", HERMES_MODEL="hermes-agent"; anything
+ * else is a real GET .../hermes/model-options catalog id from the
+ * session-based model-lock path), not a guess. */
+function hermesTurnCustom(turn: HermesTurn): { usage?: HermesUsage; route?: HermesRoute } {
+  if (!turn.model_used) return {};
+  const route: HermesRoute =
+    turn.model_used === "openrouter/free"
+      ? { path: "fast", model: turn.model_used }
+      : turn.model_used === "hermes-agent"
+        ? { path: "escalated", model: turn.model_used }
+        : { path: "model", model: turn.model_used };
+  const usage: HermesUsage | undefined = turn.tokens_used
+    ? {
+        promptTokens: turn.tokens_used.prompt ?? undefined,
+        completionTokens: turn.tokens_used.completion ?? undefined,
+        totalTokens:
+          turn.tokens_used.prompt != null && turn.tokens_used.completion != null
+            ? turn.tokens_used.prompt + turn.tokens_used.completion
+            : undefined,
+      }
+    : undefined;
+  return { usage, route };
 }
 
 /**
@@ -52,6 +80,14 @@ export function createHermesHistoryAdapter(config: HermesHistoryConfig): ThreadH
             role: turn.role as "user" | "assistant",
             content: turn.content,
             createdAt: new Date(turn.created_at),
+            // Real model_used/tokens_used, already durably stored per turn
+            // (see app/conversations/streaming_routes.py's _persist_assistant_
+            // turn) - lets ResponseMeta (bindings/Thread.tsx) show real
+            // provider/model/cost for history too, not just freshly-streamed
+            // replies. No `timing` here: latency was never recorded per turn
+            // (ConversationTurn.latency_ms exists in the schema but nothing
+            // writes it), so it's honestly omitted rather than guessed.
+            ...(turn.role === "assistant" ? { metadata: { custom: hermesTurnCustom(turn) } } : {}),
           })),
       );
     },
