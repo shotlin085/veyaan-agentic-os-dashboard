@@ -37,6 +37,110 @@ const DeepSeekLogo: FC<LogoProps> = (props) => (
   </svg>
 );
 
+const QwenLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <circle cx="12" cy="12" r="10" fill="#6C3FF4" />
+    <path
+      fill="#fff"
+      d="M12 5.2 17.8 8.6v6.8L12 18.8 6.2 15.4V8.6L12 5.2Zm0 2.3-3.9 2.28v4.44L12 16.5l3.9-2.28V9.78L12 7.5Z"
+    />
+    <circle cx="12" cy="12" r="2.1" fill="#fff" />
+  </svg>
+);
+
+const MoonshotLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <circle cx="12" cy="12" r="10" fill="#16172B" />
+    <path
+      fill="#fff"
+      d="M14.8 5.6a7 7 0 1 0 0 12.8 8.4 8.4 0 0 1 0-12.8Z"
+    />
+  </svg>
+);
+
+const MiniMaxLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <circle cx="12" cy="12" r="10" fill="#FF4D4F" />
+    <path
+      fill="#fff"
+      d="M6 17V7h2.1l2.9 4.8L13.9 7H16v10h-2.2v-6.4L11 15.3 8.2 10.6V17H6Z"
+    />
+  </svg>
+);
+
+const ZAiLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <rect x="2" y="2" width="20" height="20" rx="6" fill="#155EEF" />
+    <path fill="#fff" d="M7.5 8h9l-6 8h6v1.5h-9l6-8h-6V8Z" />
+  </svg>
+);
+
+const XiaomiLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="#FF6900" />
+    <path fill="#fff" d="M6.8 7h2.9l2.3 6.2L14.3 7h2.9l-3.6 10h-2.3L6.8 7Z" />
+  </svg>
+);
+
+const TencentLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <circle cx="12" cy="12" r="10" fill="#0052D9" />
+    <path
+      fill="#fff"
+      d="M12 5.5c2.5 0 4.4 1.7 4.4 4.1 0 1.9-1.2 3-2.2 3.7 1.6.4 3.4 1.4 3.4 3.1 0 1.9-2.3 2.9-5.6 2.9s-5.6-1-5.6-2.9c0-1.7 1.8-2.7 3.4-3.1-1-.7-2.2-1.8-2.2-3.7 0-2.4 1.9-4.1 4.4-4.1Zm0 1.6c-1.4 0-2.4 1-2.4 2.4S10.6 12 12 12s2.4-1 2.4-2.5-1-2.4-2.4-2.4Zm0 7.2c-2.1 0-3.6.7-3.6 1.5s1.5 1.5 3.6 1.5 3.6-.7 3.6-1.5-1.5-1.5-3.6-1.5Z"
+    />
+  </svg>
+);
+
+const StepFunLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <rect x="2" y="2" width="20" height="20" rx="6" fill="#0F1115" />
+    <path fill="#fff" d="M5 17h4v-3h4V9h4V6h2v5h-4v5H9v3H5v-2Z" />
+  </svg>
+);
+
+const NvidiaLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <circle cx="12" cy="12" r="10" fill="#000" />
+    <path
+      fill="#76B900"
+      d="M6.3 10.2c1.6-1.5 3.7-2.4 5.9-2.4 3.9 0 7.2 2.6 8.3 6.1-1.1-1.5-3-2.5-5.1-2.5-.5 0-1 .05-1.4.15v-1.6c.4-.03.8-.05 1.2-.05 2.2 0 4.1.9 5.3 2.4-1.4-3.9-5.1-6.7-9.4-6.7-2 0-3.8.6-5.4 1.7l.6.9Zm5.9 1.1c-1.9 0-3.6.7-4.9 1.9l1 1.1c1-1 2.4-1.6 3.9-1.6 2.2 0 4.1 1.4 4.8 3.3-1.5-.9-3.3-.9-4.8-.1v-1.6c.4-.1.9-.15 1.3-.15 1.1 0 2.1.4 2.8 1.1-.9-2.3-3.1-3.9-5.7-3.9h.6Z"
+    />
+  </svg>
+);
+
+const SakanaLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <circle cx="12" cy="12" r="10" fill="#E8536A" />
+    <path
+      fill="#fff"
+      d="M17 12c-1.6-2.4-4-3.8-6.4-3.8-2.6 0-4.9 1.6-5.9 3.8 1 2.2 3.3 3.8 5.9 3.8 2.4 0 4.8-1.4 6.4-3.8Zm0 0 2.3-1.6-.6 1.6.6 1.6L17 12Z"
+    />
+    <circle cx="8.6" cy="11.3" r=".8" fill="#E8536A" />
+  </svg>
+);
+
+const PoolsideLogo: FC<LogoProps> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <circle cx="12" cy="12" r="10" fill="#00A3A3" />
+    <path
+      d="M4.5 9.5c1.2 1 2 1 3.2 0s2-1 3.2 0 2 1 3.2 0 2-1 3.2 0 2 1 3.2 0"
+      stroke="#fff"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      fill="none"
+    />
+    <path
+      d="M4.5 13.5c1.2 1 2 1 3.2 0s2-1 3.2 0 2 1 3.2 0 2-1 3.2 0 2 1 3.2 0"
+      stroke="#fff"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      fill="none"
+      opacity=".6"
+    />
+  </svg>
+);
+
 export interface ProviderLogoProps {
   provider: string;
   className?: string;
@@ -46,10 +150,11 @@ export interface ProviderLogoProps {
  * Small brand marks for the model picker (matches the reference ChatGPT-
  * style picker the user pointed at). Abstract/simplified renditions, not
  * traced official logo files - fine for identifying a real third-party
- * provider in a small UI icon slot, same as any IDE's model picker.
- * Providers without a known mark (the long tail of the 34-model catalog -
- * Qwen, Moonshot, MiniMax, Z.AI, etc.) fall back to a generic chip icon
- * rather than guessing at a logo.
+ * provider in a small UI icon slot, same as any IDE's model picker. Every
+ * provider currently in the real 34-model catalog (GET .../hermes/model-
+ * options) has a mark now; a generic chip icon is still the fallback for
+ * anything the catalog adds later that isn't covered here yet, rather
+ * than guessing at an unfamiliar brand's mark.
  */
 export const ProviderLogo: FC<ProviderLogoProps> = ({ provider, className }) => {
   const size = className ?? "size-3.5";
@@ -64,6 +169,26 @@ export const ProviderLogo: FC<ProviderLogoProps> = ({ provider, className }) => 
       return <XAILogo className={size} />;
     case "DeepSeek":
       return <DeepSeekLogo className={size} />;
+    case "Qwen":
+      return <QwenLogo className={size} />;
+    case "Moonshot AI":
+      return <MoonshotLogo className={size} />;
+    case "MiniMax":
+      return <MiniMaxLogo className={size} />;
+    case "Z.AI":
+      return <ZAiLogo className={size} />;
+    case "Xiaomi":
+      return <XiaomiLogo className={size} />;
+    case "Tencent":
+      return <TencentLogo className={size} />;
+    case "StepFun":
+      return <StepFunLogo className={size} />;
+    case "NVIDIA":
+      return <NvidiaLogo className={size} />;
+    case "Sakana AI":
+      return <SakanaLogo className={size} />;
+    case "Poolside":
+      return <PoolsideLogo className={size} />;
     default:
       return <CpuIcon className={`${size} text-foreground/40`} />;
   }
