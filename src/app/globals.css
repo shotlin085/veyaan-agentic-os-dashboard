@@ -235,12 +235,38 @@ body {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
 
-/* Dead in both v3 and v4: no `animate-collapsible-down`/`-up` utility is
-   registered (the v3 config never defined `theme.animation.collapsible-*`
-   either), so `data-open:animate-collapsible-down` in the pulled
-   assistant-ui components currently has no effect - these keyframes exist
-   but are unreferenced. Left as-is; Phase 3.3 addresses the underlying
-   Base UI/Radix collapsible-height gap for the new Elements. */
+/* Base UI -> Radix collapsible bridge. The assistant-ui Elements'
+   `collapsePanel` recipe (src/components/elements/surfaces.tsx) was
+   authored against Base UI's Collapsible, which exposes
+   `--collapsible-panel-height` and `data-starting-style`/`data-ending-
+   style`. This repo's collapsible primitive (src/components/ui/
+   collapsible.tsx) is Radix, which instead exposes
+   `--radix-collapsible-content-height` and `data-state="open"|"closed"`
+   - so `data-[starting-style]:h-0`/`data-[ending-style]:h-0` never match
+   and `h-(--collapsible-panel-height)` would resolve to nothing without
+   this bridge. Scoped via an attribute-contains selector on the
+   Tailwind arbitrary-property class itself (present verbatim in the
+   rendered `class` attribute) rather than a bare `[data-state]`, so this
+   doesn't also apply to unrelated Radix Dialog/Tooltip/etc instances
+   elsewhere in the app that share the same attribute. Drives the actual
+   open/close transition off `data-state` per Radix's own documented
+   animation pattern, using the collapsible-down/up keyframes below. */
+[class*="collapsible-panel-height"][data-state] {
+  --collapsible-panel-height: var(--radix-collapsible-content-height);
+}
+[class*="collapsible-panel-height"][data-state="open"] {
+  animation: collapsible-down 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+[class*="collapsible-panel-height"][data-state="closed"] {
+  animation: collapsible-up 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="collapsible-panel-height"][data-state="open"],
+  [class*="collapsible-panel-height"][data-state="closed"] {
+    animation: none;
+  }
+}
+
 @keyframes collapsible-down {
   from {
     height: 0;
