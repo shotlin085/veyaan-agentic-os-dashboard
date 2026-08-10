@@ -1,7 +1,7 @@
 "use client";
 
-import type { ComponentProps } from "react";
-import { PinIcon, SearchIcon } from "lucide-react";
+import { useState, type ComponentProps } from "react";
+import { PencilIcon, PinIcon, SearchIcon, Trash2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { field, mono, paper } from "./surfaces";
 
@@ -20,11 +20,13 @@ export function ThreadSearch({
   onQueryChange,
   onSelect,
   onTogglePin,
+  onRename,
+  onDelete,
   className,
   ...props
 }: Omit<
   ComponentProps<"div">,
-  "children" | "threads" | "query" | "activeId" | "onQueryChange" | "onSelect" | "onTogglePin"
+  "children" | "threads" | "query" | "activeId" | "onQueryChange" | "onSelect" | "onTogglePin" | "onRename" | "onDelete"
 > & {
   threads: readonly SearchableThread[];
   query: string;
@@ -32,7 +34,22 @@ export function ThreadSearch({
   onQueryChange?: (query: string) => void;
   onSelect?: (id: string) => void;
   onTogglePin?: (id: string, pinned: boolean) => void;
+  onRename?: (id: string, title: string) => void;
+  onDelete?: (id: string) => void;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  const startRename = (thread: SearchableThread) => {
+    setEditingId(thread.id);
+    setEditValue(thread.title);
+  };
+
+  const commitRename = (id: string) => {
+    const value = editValue.trim();
+    if (value) onRename?.(id, value);
+    setEditingId(null);
+  };
   const matches = threads.filter((thread) =>
     `${thread.title} ${thread.preview}`
       .toLowerCase()
@@ -70,52 +87,105 @@ export function ThreadSearch({
     }
   };
 
-  const row = (thread: SearchableThread) => (
-    <div
-      key={thread.id}
-      className={cn(
-        "group/thread flex items-start gap-1 rounded-xl px-2 py-1 transition-colors",
-        thread.id === activeId
-          ? "bg-foreground/[0.05]"
-          : "hover:bg-foreground/[0.03]",
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => onSelect?.(thread.id)}
-        className="flex min-w-0 flex-1 flex-col gap-0.5 text-start"
+  const row = (thread: SearchableThread) => {
+    const isEditing = editingId === thread.id;
+    return (
+      <div
+        key={thread.id}
+        className={cn(
+          "group/thread flex items-start gap-1 rounded-xl px-2 py-1 transition-colors",
+          thread.id === activeId
+            ? "bg-foreground/[0.05]"
+            : "hover:bg-foreground/[0.03]",
+        )}
       >
-        <span className="flex items-center gap-1.5">
-          {thread.pinned && (
-            <PinIcon className="text-foreground/30 size-2.5 shrink-0 fill-current" />
-          )}
-          <span className="min-w-0 flex-1 truncate text-[13px]">
-            {thread.title}
-          </span>
-        </span>
-        <span className="text-foreground/35 truncate text-xs">
-          {thread.preview}
-        </span>
-      </button>
-      {onTogglePin && (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onTogglePin(thread.id, !thread.pinned);
-          }}
-          aria-label={thread.pinned ? "Unpin thread" : "Pin thread"}
-          aria-pressed={thread.pinned}
-          className={cn(
-            "shrink-0 rounded-md p-1 text-foreground/30 transition-colors hover:bg-foreground/[0.08] hover:text-foreground/80",
-            thread.pinned ? "opacity-100" : "opacity-0 group-hover/thread:opacity-100 focus-visible:opacity-100",
-          )}
-        >
-          <PinIcon className={cn("size-3", thread.pinned && "fill-current")} />
-        </button>
-      )}
-    </div>
-  );
+        {isEditing ? (
+          <input
+            autoFocus
+            value={editValue}
+            onChange={(event) => setEditValue(event.target.value)}
+            onClick={(event) => event.stopPropagation()}
+            onBlur={() => commitRename(thread.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitRename(thread.id);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                setEditingId(null);
+              }
+            }}
+            className="min-w-0 flex-1 rounded-md bg-foreground/[0.08] px-1.5 py-0.5 text-[13px] text-foreground outline-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSelect?.(thread.id)}
+            className="flex min-w-0 flex-1 flex-col gap-0.5 text-start"
+          >
+            <span className="flex items-center gap-1.5">
+              {thread.pinned && (
+                <PinIcon className="text-foreground/30 size-2.5 shrink-0 fill-current" />
+              )}
+              <span className="min-w-0 flex-1 truncate text-[13px]">
+                {thread.title}
+              </span>
+            </span>
+            <span className="text-foreground/35 truncate text-xs">
+              {thread.preview}
+            </span>
+          </button>
+        )}
+        {!isEditing && (
+          <div className="flex shrink-0 items-center gap-0.5">
+            {onTogglePin && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onTogglePin(thread.id, !thread.pinned);
+                }}
+                aria-label={thread.pinned ? "Unpin thread" : "Pin thread"}
+                aria-pressed={thread.pinned}
+                className={cn(
+                  "shrink-0 rounded-md p-1 text-foreground/30 transition-colors hover:bg-foreground/[0.08] hover:text-foreground/80",
+                  thread.pinned ? "opacity-100" : "opacity-0 group-hover/thread:opacity-100 focus-visible:opacity-100",
+                )}
+              >
+                <PinIcon className={cn("size-3", thread.pinned && "fill-current")} />
+              </button>
+            )}
+            {onRename && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startRename(thread);
+                }}
+                aria-label="Rename thread"
+                className="shrink-0 rounded-md p-1 text-foreground/30 opacity-0 transition-colors hover:bg-foreground/[0.08] hover:text-foreground/80 group-hover/thread:opacity-100 focus-visible:opacity-100"
+              >
+                <PencilIcon className="size-3" />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (window.confirm(`Delete "${thread.title}"? This can't be undone.`)) onDelete(thread.id);
+                }}
+                aria-label="Delete thread"
+                className="shrink-0 rounded-md p-1 text-foreground/30 opacity-0 transition-colors hover:bg-red-500/10 hover:text-red-400 group-hover/thread:opacity-100 focus-visible:opacity-100"
+              >
+                <Trash2Icon className="size-3" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div

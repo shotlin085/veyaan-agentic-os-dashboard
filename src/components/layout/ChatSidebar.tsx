@@ -57,7 +57,7 @@ function dayGroup(iso: string): string {
  */
 export function ChatSidebar() {
   const pathname = usePathname();
-  const { conversations, activeId, loading, error, selectById, createConversation, setPinned } = useConversations();
+  const { conversations, activeId, loading, error, selectById, createConversation, setPinned, renameConversation, deleteConversation } = useConversations();
   const { user, signOut } = useAuth();
   const { workspaces, workspace, selectWorkspace } = useWorkspace();
   const { status } = useRuntimeStatus();
@@ -119,6 +119,8 @@ export function ChatSidebar() {
             onQueryChange={setQuery}
             onSelect={(id) => selectById(id)}
             onTogglePin={(id, pinned) => void setPinned(id, pinned)}
+            onRename={(id, title) => void renameConversation(id, title)}
+            onDelete={(id) => void deleteConversation(id)}
             className="w-full max-w-none rounded-none bg-transparent p-0 shadow-none dark:bg-transparent dark:shadow-none"
           />
         )}

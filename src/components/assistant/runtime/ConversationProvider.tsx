@@ -14,6 +14,8 @@ interface ConversationContextValue {
   createConversation: () => Promise<string | null>;
   refresh: () => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
+  renameConversation: (id: string, title: string) => Promise<void>;
+  deleteConversation: (id: string) => Promise<boolean>;
 }
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
@@ -52,6 +54,17 @@ export const ConversationProvider: FC<{ children: ReactNode }> = ({ children }) 
     },
     refresh: hook.refresh,
     setPinned: hook.setPinned,
+    renameConversation: hook.renameConversation,
+    deleteConversation: async (id) => {
+      const wasActive = id === activeId;
+      const ok = await hook.deleteConversation(id);
+      // Deleting the conversation you're currently looking at would
+      // otherwise leave the page pointed at a URL that 404s the next
+      // time the list refreshes - send it back to the neutral "pick a
+      // conversation" route instead.
+      if (ok && wasActive) router.push("/");
+      return ok;
+    },
   };
 
   return <ConversationContext.Provider value={value}>{children}</ConversationContext.Provider>;

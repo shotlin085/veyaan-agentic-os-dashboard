@@ -23,6 +23,8 @@ interface UseHermesConversationsResult {
   createConversation: () => Promise<string | null>;
   refresh: () => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
+  renameConversation: (id: string, title: string) => Promise<void>;
+  deleteConversation: (id: string) => Promise<boolean>;
 }
 
 /**
@@ -118,5 +120,50 @@ export function useHermesConversations(): UseHermesConversationsResult {
     [token, workspaceId],
   );
 
-  return { loading, error, conversations, createConversation, refresh, setPinned };
+  const renameConversation = useCallback(
+    async (id: string, title: string): Promise<void> => {
+      if (!token || !workspaceId) return;
+      let previousTitle: string | null = null;
+      setConversations((current) =>
+        current.map((c) => {
+          if (c.id !== id) return c;
+          previousTitle = c.title;
+          return { ...c, title };
+        }),
+      );
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/conversations/${id}`, {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        if (!response.ok) throw new Error("Rename failed.");
+      } catch (cause) {
+        setConversations((current) => current.map((c) => (c.id === id ? { ...c, title: previousTitle } : c)));
+        setError(cause instanceof Error ? cause.message : "Rename failed.");
+      }
+    },
+    [token, workspaceId],
+  );
+
+  const deleteConversation = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (!token || !workspaceId) return false;
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/conversations/${id}`, {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (!response.ok && response.status !== 204) throw new Error("Delete failed.");
+        setConversations((current) => current.filter((c) => c.id !== id));
+        return true;
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Delete failed.");
+        return false;
+      }
+    },
+    [token, workspaceId],
+  );
+
+  return { loading, error, conversations, createConversation, refresh, setPinned, renameConversation, deleteConversation };
 }
