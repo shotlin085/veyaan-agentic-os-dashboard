@@ -19,6 +19,11 @@ type HermesStreamEvent =
       label?: string;
       tool_call_id?: string;
       status?: "running" | "completed" | "failed";
+    }
+  | {
+      event: "assistant.plan.updated";
+      items?: { id: string; text: string; status: "pending" | "active" | "done" }[];
+      revision?: number;
     };
 
 interface ToolCallState {
@@ -53,6 +58,17 @@ export interface HermesRoute {
   providerId?: string;
 }
 
+export interface HermesPlanItem {
+  id: string;
+  text: string;
+  status: "pending" | "active" | "done";
+}
+
+export interface HermesPlan {
+  items: HermesPlanItem[];
+  revision: number;
+}
+
 function lastUserMessageText(messages: readonly ThreadMessage[]): string {
   const message = [...messages].reverse().find((entry) => entry.role === "user");
   if (!message || !Array.isArray(message.content)) return "";
@@ -83,6 +99,10 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       // from a bring-your-own-key provider (ModelPickerButton) - routes
       // through that provider's own API server-side instead of Hermes.
       const providerId = typeof runConfig.custom?.providerId === "string" ? runConfig.custom.providerId : undefined;
+      // Set via the composer's Plan toggle (bindings/Thread.tsx) - real
+      // plan-then-execute mode (SendMessageRequest.plan on the backend),
+      // not a client-side simulation.
+      const plan = runConfig.custom?.plan === true;
 
       if (!config.workspaceId || !config.conversationId || !config.token) {
         yield {
@@ -101,6 +121,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
           content,
           model,
           providerId,
+          plan,
         }),
         signal: abortSignal,
       }).catch(() => null);
@@ -128,6 +149,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       let accumulated = "";
       let usage: HermesUsage | undefined;
       let route: HermesRoute | undefined;
+      let plan_: HermesPlan | undefined;
       let finished = false;
       let errored = false;
       const toolCalls = new Map<string, ToolCallState>();
@@ -234,6 +256,11 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
                 }
                 break;
               }
+              case "assistant.plan.updated":
+                if (parsed.items && parsed.revision !== undefined) {
+                  plan_ = { items: parsed.items, revision: parsed.revision };
+                }
+                break;
               default:
                 break;
             }
@@ -249,7 +276,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
             yield {
               content: [...buildToolParts(), { type: "text", text: accumulated }],
               status,
-              metadata: { custom: { usage, route }, timing: buildTiming() },
+              metadata: { custom: { usage, route, plan: plan_ }, timing: buildTiming() },
             };
           }
 
@@ -266,7 +293,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
         yield {
           content: [...buildToolParts(), { type: "text", text: accumulated }],
           status: { type: "incomplete", reason: "cancelled" },
-          metadata: { custom: { usage, route }, timing: buildTiming() },
+          metadata: { custom: { usage, route, plan: plan_ }, timing: buildTiming() },
         };
         config.onTurnSettled?.();
         return;

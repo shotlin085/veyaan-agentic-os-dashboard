@@ -1,7 +1,7 @@
 "use client";
 
 import { ExportedMessageRepository, type ThreadHistoryAdapter } from "@assistant-ui/react";
-import type { HermesRoute, HermesUsage } from "./hermes-adapter";
+import type { HermesPlan, HermesRoute, HermesUsage } from "./hermes-adapter";
 
 interface HermesTurn {
   id: string;
@@ -10,6 +10,9 @@ interface HermesTurn {
   content_type: string;
   model_used: string | null;
   tokens_used: Record<string, number | null> | null;
+  // Present on plan-mode turns (see streaming_routes.py's _run_plan_path) -
+  // every other turn has this as {} (the column's own default).
+  meta?: { plan?: HermesPlan } | null;
   created_at: string;
 }
 
@@ -25,7 +28,7 @@ export interface HermesHistoryConfig {
  * (FAST_PATH_MODEL="openrouter/free", HERMES_MODEL="hermes-agent"; anything
  * else is a real GET .../hermes/model-options catalog id from the
  * session-based model-lock path), not a guess. */
-function hermesTurnCustom(turn: HermesTurn): { usage?: HermesUsage; route?: HermesRoute } {
+function hermesTurnCustom(turn: HermesTurn): { usage?: HermesUsage; route?: HermesRoute; plan?: HermesPlan } {
   if (!turn.model_used) return {};
   // "custom:{provider_id}:{model}" - streaming_routes.py's
   // _run_custom_provider_path's own model_used encoding for a bring-
@@ -49,7 +52,7 @@ function hermesTurnCustom(turn: HermesTurn): { usage?: HermesUsage; route?: Herm
             : undefined,
       }
     : undefined;
-  return { usage, route };
+  return { usage, route, plan: turn.meta?.plan ?? undefined };
 }
 
 /**

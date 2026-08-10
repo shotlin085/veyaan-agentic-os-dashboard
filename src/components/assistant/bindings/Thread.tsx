@@ -23,6 +23,7 @@ import {
   CopyIcon,
   DownloadIcon,
   EllipsisIcon,
+  ListChecksIcon,
   PencilIcon,
   RefreshCwIcon,
   ThumbsDownIcon,
@@ -44,6 +45,8 @@ import { StoppedRun } from "@/components/elements/stopped-run";
 import { MessageQueue } from "@/components/elements/message-queue";
 import { MessageTiming } from "@/components/elements/message-timing";
 import { CostMeter } from "@/components/elements/cost-meter";
+import { AgentPlan } from "@/components/elements/agent-plan";
+import { TodoList } from "@/components/elements/todo-list";
 import {
   ComposerActions,
   ComposerAttachButton,
@@ -63,7 +66,7 @@ import { useProviders } from "@/components/assistant/runtime/hermes-providers";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
 import { SLASH_COMMANDS, type SlashCommand } from "@/components/assistant/bindings/slash-commands";
-import type { HermesRoute, HermesUsage } from "@/components/assistant/runtime/hermes-adapter";
+import type { HermesPlan, HermesRoute, HermesUsage } from "@/components/assistant/runtime/hermes-adapter";
 
 const STARTER_PROMPTS = [
   "What can you help me with?",
@@ -364,6 +367,33 @@ const ResponseMeta: FC = () => {
   return <MessageTiming stats={stats} streaming={streaming} />;
 };
 
+/**
+ * Real plan-mode progress, not decorative - built from the
+ * assistant.plan.updated SSE events hermes-adapter.ts already threads into
+ * metadata.custom.plan (live) or the completed turn's persisted meta.plan
+ * (history, hermes-history-adapter.ts). Renders nothing for a normal
+ * message (no plan data at all). Before any step starts (every item still
+ * "pending"), shows the plan as a preview via AgentPlan; once execution
+ * begins, switches to TodoList for live per-step progress - the two
+ * elements cover the same underlying data, just at different moments
+ * (preview vs. live), so only one renders at a time rather than showing
+ * both redundantly.
+ */
+const PlanDisplay: FC = () => {
+  const plan = useAuiState((s) =>
+    s.message.role === "assistant"
+      ? (s.message.metadata.custom as { plan?: HermesPlan } | undefined)?.plan
+      : undefined,
+  );
+
+  if (!plan || plan.items.length === 0) return null;
+  const started = plan.items.some((item) => item.status !== "pending");
+  if (!started) {
+    return <AgentPlan steps={plan.items.map((item) => item.text)} activeIndex={-1} className="mb-1" />;
+  }
+  return <TodoList items={plan.items} revision={plan.revision} className="mb-1" />;
+};
+
 const AssistantMessage: FC = () => {
   const [dismissed, setDismissed] = useState(false);
   const isEmptyRunning = useAuiState((s) => {
@@ -387,6 +417,7 @@ const AssistantMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="group/message flex w-full flex-col gap-1.5">
       <div className="flex flex-col gap-2 text-sm leading-relaxed text-foreground">
+        <PlanDisplay />
         {isCancelled && !dismissed ? (
           <StoppedRunBlock onDiscard={() => setDismissed(true)} />
         ) : isEmptyRunning ? (
@@ -560,13 +591,16 @@ const MessageBranchPicker: FC = () => {
  * ComposerPrimitive.Input only intercepts Arrow/Enter while the menu is open
  * (preventDefault there skips assistant-ui's own Enter-to-send handler,
  * confirmed via its composeEventHandlers wiring); every other key, or once
- * the menu has no matches, falls through untouched.
+ * the menu has no matches, falls through untouched. `/plan` is the one
+ * command that also flips real plan mode (see PlanToggleButton) - every
+ * other command is text-only.
  */
 const Composer: FC = () => {
   const aui = useAui();
   const value = useAuiState((s) => s.composer.text);
   const matches = useSlashMatches(value, SLASH_COMMANDS) as SlashCommand[];
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const runConfigCustom = useAuiState((s) => s.composer.runConfig.custom);
 
   useEffect(() => {
     setHighlightIndex(0);
@@ -574,6 +608,9 @@ const Composer: FC = () => {
 
   const selectCommand = (command: SlashCommand) => {
     aui.composer.setText(command.template);
+    if (command.name === "plan") {
+      aui.composer.setRunConfig({ custom: { ...runConfigCustom, plan: true } });
+    }
   };
 
   return (
@@ -613,6 +650,7 @@ const Composer: FC = () => {
           <ComposerAttachButton title="File attachments aren't supported by Hermes yet" />
           <ComposerActions>
             <ModelPickerButton />
+            <PlanToggleButton />
             <SessionCostButton />
             <DictationButton />
             <ComposerSendAction />
@@ -716,6 +754,40 @@ const ModelPickerButton: FC = () => {
         )}
       </ComposerMenu>
     </div>
+  );
+};
+
+/**
+ * Real plan-then-execute toggle - sets runConfig.custom.plan, read by
+ * hermes-adapter.ts and forwarded to the backend's SendMessageRequest.plan
+ * (see streaming_routes.py's _run_plan_path). Preserves the currently
+ * selected model/providerId across the toggle rather than clearing them -
+ * turning plan mode back off should leave whatever model was picked
+ * before untouched, even though plan mode itself always uses hermes-agent
+ * regardless of model selection while it's on.
+ */
+const PlanToggleButton: FC = () => {
+  const aui = useAui();
+  const runConfigCustom = useAuiState((s) => s.composer.runConfig.custom);
+  const active = runConfigCustom?.plan === true;
+
+  return (
+    <button
+      type="button"
+      aria-label="Plan mode"
+      aria-pressed={active}
+      title="Plan first, then execute step by step - best for complex, multi-part tasks"
+      onClick={() => aui.composer.setRunConfig({ custom: { ...runConfigCustom, plan: !active } })}
+      className={cn(
+        "flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] transition-colors",
+        active
+          ? "bg-foreground/[0.09] text-foreground"
+          : "text-foreground/55 hover:bg-foreground/[0.06] hover:text-foreground/90 dark:hover:bg-foreground/[0.09]",
+      )}
+    >
+      <ListChecksIcon className="size-3.5" />
+      Plan
+    </button>
   );
 };
 
