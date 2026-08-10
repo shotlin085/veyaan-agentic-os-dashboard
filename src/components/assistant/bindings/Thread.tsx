@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC, useEffect, useRef, useState } from "react";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -60,16 +60,22 @@ import {
   ComposerMenu,
   ComposerMenuItem,
   ComposerModelTrigger,
+  ComposerPersonItem,
   ComposerSend,
   ComposerToolbar,
   ComposerVoiceButton,
+  useMentionMatches,
   useSlashMatches,
+  type ComposerPerson,
 } from "@/components/elements/composer";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
 import { useHermesToolsets } from "@/components/assistant/runtime/hermes-toolsets";
 import { useReasoningModels } from "@/components/assistant/runtime/hermes-reasoning-models";
 import { useProviders } from "@/components/assistant/runtime/hermes-providers";
+import { useActiveAgent } from "@/components/assistant/runtime/ActiveAgentContext";
+import { useConversations } from "@/components/assistant/runtime/ConversationProvider";
+import { useWorkspaceCollection } from "@/lib/workspace/useWorkspaceCollection";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
 import { SLASH_COMMANDS, type SlashCommand } from "@/components/assistant/bindings/slash-commands";
@@ -105,7 +111,11 @@ const TOOL_VERBS: Record<string, { active: string; done: string }> = {
   image_gen: { active: "Generating an image", done: "Generated an image" },
   memory: { active: "Checking memory", done: "Checked memory" },
   todo: { active: "Updating the plan", done: "Updated the plan" },
-  delegation: { active: "Delegating a task", done: "Delegated a task" },
+  // Real registered tool name is "delegate_task" (hermes-agent's
+  // tools/delegate_tool.py, emoji="🔀" already sent through in args.emoji)
+  // - "delegation" never matched, so this always fell through to the
+  // generic humanized-name fallback instead of a real verb pair.
+  delegate_task: { active: "Delegating to a subagent", done: "Delegated to a subagent" },
   cronjob: { active: "Scheduling a job", done: "Scheduled a job" },
 };
 
@@ -346,12 +356,18 @@ const ResponseMeta: FC = () => {
       ? (s.message.metadata.custom as { usage?: HermesUsage; route?: HermesRoute } | undefined)
       : undefined,
   );
+  // Same value for every message in an agent-scoped conversation (it's a
+  // conversation-level fact, not a per-message one) - shown per-message
+  // anyway alongside model/cost so it's visible without scrolling back up
+  // to the ActiveAgentBanner at the top of the thread.
+  const { displayName: agentName } = useActiveAgent();
 
   if (!custom?.route) return null;
   const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr, providers);
   const costValue = cost.usdCost === 0 ? "Free" : cost.inrCost !== null ? formatInr(cost.inrCost) : "—";
 
   const stats = [
+    ...(agentName ? [{ label: "agent", value: agentName }] : []),
     { label: "via", value: cost.provider },
     ...(cost.modelLabel !== "—" ? [{ label: "model", value: cost.modelLabel }] : []),
     ...(timing?.totalStreamTime ? [{ label: "time", value: `${(timing.totalStreamTime / 1000).toFixed(1)}s` }] : []),
@@ -601,13 +617,43 @@ const MessageBranchPicker: FC = () => {
  * the menu has no matches, falls through untouched. `/plan` is the one
  * command that also flips real plan mode (see PlanToggleButton) - every
  * other command is text-only.
+ *
+ * @mentions pick a real agent definition (real records from
+ * useWorkspaceCollection("agent-definitions"), not a fixture) using the
+ * same useMentionMatches/ComposerPersonItem elements.tsx already shipped
+ * for this - they just had no real data source wired in before. Unlike
+ * slash commands, selecting a mention can't rewrite the current message:
+ * Conversation.agent_definition_id is fixed at creation
+ * (app/conversations/models.py), so there's no way to retroactively scope
+ * an in-progress conversation to a different agent. Selecting one instead
+ * starts a fresh agent-scoped conversation (same real path as the "Start
+ * conversation with this agent" button on /agents/[id]) and clears the
+ * composer - one agent per conversation, no parallel/collaborative
+ * execution, matching the scope actually built here.
  */
 const Composer: FC = () => {
   const aui = useAui();
   const value = useAuiState((s) => s.composer.text);
   const matches = useSlashMatches(value, SLASH_COMMANDS) as SlashCommand[];
+  const { records: agentRecords } = useWorkspaceCollection("agent-definitions");
+  const { createConversation } = useConversations();
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [switchingAgent, setSwitchingAgent] = useState(false);
   const runConfigCustom = useAuiState((s) => s.composer.runConfig.custom);
+
+  const agentPeople: ComposerPerson[] = useMemo(
+    () =>
+      agentRecords
+        .map((r) => String(r.display_name ?? r.name ?? ""))
+        .filter(Boolean)
+        .map((name) => ({ name, role: "agent" as const })),
+    [agentRecords],
+  );
+  const mentionMatches = useMentionMatches(value, agentPeople);
+  // Only one of these is ever non-empty for a given `value` - a slash
+  // command match requires the whole input to start with "/", a mention
+  // match requires a trailing "@word", mutually exclusive triggers.
+  const matchCount = matches.length > 0 ? matches.length : mentionMatches.length;
 
   useEffect(() => {
     setHighlightIndex(0);
@@ -618,6 +664,33 @@ const Composer: FC = () => {
     if (command.name === "plan") {
       aui.composer.setRunConfig({ custom: { ...runConfigCustom, plan: true } });
     }
+  };
+
+  const selectAgentMention = async (person: ComposerPerson) => {
+    if (switchingAgent) return;
+    const record = agentRecords.find((r) => (r.display_name ?? r.name) === person.name);
+    const agentId = record ? String(record.id ?? "") : "";
+    if (!agentId) return;
+    setSwitchingAgent(true);
+    aui.composer.setText("");
+    const conversationId = await createConversation(agentId);
+    if (!conversationId) setSwitchingAgent(false);
+    // On success, createConversation navigates to /c/[id] itself
+    // (ConversationProvider.tsx) - this component unmounts, no further
+    // state update needed here.
+  };
+
+  // Slash commands only ever match when the whole message starts with "/" -
+  // a deliberate, unambiguous signal, safe to let Enter commit. "@" can
+  // appear at the end of an otherwise ordinary sentence (and a bare
+  // trailing "@" with no name yet matches every agent, since an empty
+  // query "matches" everything) - hijacking Enter for that too meant any
+  // message that happened to end in "@" silently started a brand new
+  // agent conversation instead of sending, and repeating it (or just
+  // testing what "@" does) produced a pile of stray empty conversations.
+  // Mentions now only commit via click or Tab - Enter always sends.
+  const runHighlightedSlash = () => {
+    if (matches.length > 0) selectCommand(matches[highlightIndex] ?? matches[0]);
   };
 
   return (
@@ -632,24 +705,39 @@ const Composer: FC = () => {
           />
         ))}
       </ComposerMenu>
+      <ComposerMenu open={matches.length === 0 && mentionMatches.length > 0} align="start">
+        {mentionMatches.map((person, i) => (
+          <ComposerPersonItem
+            key={person.name}
+            person={person}
+            active={i === highlightIndex}
+            onClick={() => void selectAgentMention(person)}
+          />
+        ))}
+      </ComposerMenu>
       <ComposerBar>
         <ComposerPrimitive.Input
-          placeholder="Message VEYAAN..."
+          placeholder="Message VEYAAN... (@ to talk to a specific agent)"
           className="placeholder:text-foreground/35 min-h-11 max-h-48 w-full resize-none bg-transparent px-3 py-2 text-[15px] outline-none"
           rows={1}
           autoFocus
           aria-label="Message input"
           onKeyDown={(event) => {
-            if (matches.length === 0 || event.nativeEvent.isComposing) return;
+            if (matchCount === 0 || event.nativeEvent.isComposing) return;
             if (event.key === "ArrowDown") {
               event.preventDefault();
-              setHighlightIndex((i) => (i + 1) % matches.length);
+              setHighlightIndex((i) => (i + 1) % matchCount);
             } else if (event.key === "ArrowUp") {
               event.preventDefault();
-              setHighlightIndex((i) => (i - 1 + matches.length) % matches.length);
-            } else if (event.key === "Enter") {
+              setHighlightIndex((i) => (i - 1 + matchCount) % matchCount);
+            } else if (event.key === "Enter" && matches.length > 0) {
+              // Slash-only - see runHighlightedSlash's comment for why
+              // mentions deliberately don't intercept Enter.
               event.preventDefault();
-              selectCommand(matches[highlightIndex] ?? matches[0]);
+              runHighlightedSlash();
+            } else if (event.key === "Tab" && mentionMatches.length > 0) {
+              event.preventDefault();
+              void selectAgentMention(mentionMatches[highlightIndex] ?? mentionMatches[0]);
             }
           }}
         />

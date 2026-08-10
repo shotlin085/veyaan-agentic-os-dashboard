@@ -11,7 +11,7 @@ interface ConversationContextValue {
   activeId: string | null;
   activeConversation: HermesConversation | null;
   selectById: (id: string) => void;
-  createConversation: () => Promise<string | null>;
+  createConversation: (agentDefinitionId?: string) => Promise<string | null>;
   refresh: () => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
@@ -47,8 +47,8 @@ export const ConversationProvider: FC<{ children: ReactNode }> = ({ children }) 
     activeId,
     activeConversation,
     selectById: (id) => router.push(`/c/${id}`),
-    createConversation: async () => {
-      const id = await hook.createConversation();
+    createConversation: async (agentDefinitionId) => {
+      const id = await hook.createConversation(agentDefinitionId);
       if (id) router.push(`/c/${id}`);
       return id;
     },

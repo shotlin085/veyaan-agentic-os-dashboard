@@ -12,6 +12,7 @@ export interface HermesConversation {
   status: string;
   channel: string;
   pinned: boolean;
+  agent_definition_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,7 +21,7 @@ interface UseHermesConversationsResult {
   loading: boolean;
   error: string | null;
   conversations: HermesConversation[];
-  createConversation: () => Promise<string | null>;
+  createConversation: (agentDefinitionId?: string) => Promise<string | null>;
   refresh: () => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
@@ -76,7 +77,7 @@ export function useHermesConversations(): UseHermesConversationsResult {
     void refresh();
   }, [refresh]);
 
-  const createConversation = useCallback(async (): Promise<string | null> => {
+  const createConversation = useCallback(async (agentDefinitionId?: string): Promise<string | null> => {
     if (!token || !workspaceId) return null;
     try {
       // No title here - left null so the backend's own first-message
@@ -86,7 +87,7 @@ export function useHermesConversations(): UseHermesConversationsResult {
       const response = await fetch(`/api/workspaces/${workspaceId}/conversations`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ channel: "web" }),
+        body: JSON.stringify(agentDefinitionId ? { channel: "web", agent_definition_id: agentDefinitionId } : { channel: "web" }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail ?? payload.error ?? "Could not start a conversation."));

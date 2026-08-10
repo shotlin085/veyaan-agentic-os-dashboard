@@ -218,7 +218,12 @@ export function ComposerPersonItem({
 }) {
   return (
     <ComposerMenuItem active={active} {...props}>
-      <span className="bg-foreground/[0.06] text-foreground/45 flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-medium">
+      <span
+        className={cn(
+          "flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-medium",
+          person.role === "agent" ? "bg-blue-500/15 text-blue-400" : "bg-foreground/[0.06] text-foreground/45",
+        )}
+      >
         {person.name[0]}
       </span>
       <span className="flex-1 truncate text-start">{person.name}</span>

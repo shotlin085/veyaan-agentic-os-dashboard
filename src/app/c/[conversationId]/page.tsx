@@ -1,12 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { LockKeyhole, MessageCircleQuestion } from "lucide-react";
+import { Bot, LockKeyhole, MessageCircleQuestion } from "lucide-react";
 import { Thread } from "@/components/assistant/bindings/Thread";
 import { HermesRuntimeProvider } from "@/components/assistant/runtime/HermesRuntimeProvider";
 import { useConversations } from "@/components/assistant/runtime/ConversationProvider";
+import { ActiveAgentProvider, useActiveAgent } from "@/components/assistant/runtime/ActiveAgentContext";
 import { inkButton } from "@/components/elements/surfaces";
 import { cn } from "@/lib/utils";
+
+/** Shown at the top of an agent-scoped conversation so which agent is
+ * actually driving it is visible in the UI itself, not something you have
+ * to go check the record for. Renders nothing for a normal conversation
+ * (no agent_definition_id) or while the name is still loading. */
+function ActiveAgentBanner() {
+  const { agentDefinitionId, displayName, loading } = useActiveAgent();
+  if (!agentDefinitionId || (!displayName && loading)) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-border bg-popover/60 px-4 py-2 text-xs text-muted-foreground">
+      <Bot className="size-3.5 text-foreground/60" />
+      Chatting with <span className="font-semibold text-foreground">{displayName ?? "an agent"}</span>
+    </div>
+  );
+}
 
 /**
  * One real, bookmarkable conversation per URL - refresh, browser
@@ -38,9 +54,12 @@ export default function ConversationPage() {
           <p className="text-sm text-foreground/55">Loading conversation...</p>
         </div>
       ) : (
-        <HermesRuntimeProvider conversation={activeConversation} onTurnSettled={() => void refresh()}>
-          <Thread />
-        </HermesRuntimeProvider>
+        <ActiveAgentProvider agentDefinitionId={activeConversation.agent_definition_id}>
+          <ActiveAgentBanner />
+          <HermesRuntimeProvider conversation={activeConversation} onTurnSettled={() => void refresh()}>
+            <Thread />
+          </HermesRuntimeProvider>
+        </ActiveAgentProvider>
       )}
     </div>
   );

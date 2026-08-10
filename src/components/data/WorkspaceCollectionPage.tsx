@@ -35,7 +35,13 @@ export function WorkspaceCollectionPage({ kind, title, description }: { kind: Co
         const id = value(record, "id");
         const name = isProjects ? value(record, "title") : value(record, "display_name") || value(record, "name");
         const secondary = isProjects ? value(record, "description") : isAgents ? value(record, "purpose") : `Template ${value(record, "template_id") || "unknown"}`;
-        const state = value(record, isProjects ? "state" : "status") || "unknown";
+        // Agents: `status` (draft/approved/production/...) isn't a
+        // meaningful signal pre-Agent-Factory (see AgentDefinitionStatus's
+        // own docstring, app/agents/models.py) - `is_active` is the real
+        // flag governing whether this agent can actually be talked to, so
+        // that's what the badge shows instead of a "draft" label sitting
+        // on an agent that's fully active and doing real work.
+        const state = isAgents ? (record.is_active === false ? "inactive" : "active") : value(record, "state") || "unknown";
         const detailPath = isProjects ? "projects" : isAgents ? "agents" : "departments";
         return <Card key={id || name}><CardHeader><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><CardTitle className="truncate">{name || "Untitled record"}</CardTitle><p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{secondary || "No description provided by the workspace."}</p></div><Badge tone={state === "active" || state === "running" ? "success" : "neutral"}>{state}</Badge></div></CardHeader><CardContent><div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"><span className="truncate font-mono">{id || "No record id"}</span>{id && <Link href={`/${detailPath}/${id}`} className="inline-flex shrink-0 items-center gap-1 font-semibold text-foreground hover:text-white">Inspect <ArrowRight className="h-3 w-3" /></Link>}</div></CardContent></Card>;
       })}</div>}
