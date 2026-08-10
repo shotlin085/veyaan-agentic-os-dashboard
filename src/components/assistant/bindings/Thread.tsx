@@ -330,6 +330,18 @@ const ResponseMeta: FC = () => {
     ...(cost.modelLabel !== "—" ? [{ label: "model", value: cost.modelLabel }] : []),
     ...(timing?.totalStreamTime ? [{ label: "time", value: `${(timing.totalStreamTime / 1000).toFixed(1)}s` }] : []),
     ...(timing?.tokensPerSecond ? [{ label: "speed", value: `${timing.tokensPerSecond.toFixed(0)} tok/s` }] : []),
+    ...(custom.usage
+      ? [
+          {
+            label: "in",
+            value: `${((custom.usage.promptTokens ?? 0) / 1000).toFixed(1)}k`,
+          },
+          {
+            label: "out",
+            value: `${((custom.usage.completionTokens ?? 0) / 1000).toFixed(1)}k`,
+          },
+        ]
+      : []),
     { label: "cost", value: costValue },
   ];
 
