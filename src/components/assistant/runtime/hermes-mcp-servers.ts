@@ -207,3 +207,21 @@ export function consumeRememberedMcpWorkspace(): string | null {
   window.sessionStorage.removeItem(MCP_WORKSPACE_STORAGE_KEY);
   return value;
 }
+
+const MCP_FLOW_STORAGE_KEY = "veyaan:mcp-authorize:flowId";
+
+/** Delivering the OAuth callback to Hermes only hands off the code - the
+ * actual token exchange happens afterward in a background worker on
+ * Hermes's own dashboard service. The callback page has to poll
+ * GET .../oauth/flows/{flowId} for the real outcome ("approved" vs
+ * "error"), not just trust that the handoff itself succeeded - a
+ * flow_id is the only way to find that flow again after the redirect. */
+export function rememberMcpFlow(flowId: string): void {
+  window.sessionStorage.setItem(MCP_FLOW_STORAGE_KEY, flowId);
+}
+
+export function consumeRememberedMcpFlow(): string | null {
+  const value = window.sessionStorage.getItem(MCP_FLOW_STORAGE_KEY);
+  window.sessionStorage.removeItem(MCP_FLOW_STORAGE_KEY);
+  return value;
+}

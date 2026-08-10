@@ -22,7 +22,7 @@ import { useDefaultModel, useProviders } from "@/components/assistant/runtime/he
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
 import { useHermesToolsets } from "@/components/assistant/runtime/hermes-toolsets";
 import { rememberConnectorWorkspace, useConnectors } from "@/components/assistant/runtime/hermes-connectors";
-import { rememberMcpWorkspace, useHermesMcpServers } from "@/components/assistant/runtime/hermes-mcp-servers";
+import { rememberMcpFlow, rememberMcpWorkspace, useHermesMcpServers } from "@/components/assistant/runtime/hermes-mcp-servers";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 
 // Best-effort brand match from a provider's base URL, purely for showing
@@ -478,12 +478,13 @@ function McpServersSection() {
       setBusyName(null);
       return;
     }
-    if (!result.value.authorization_url) {
+    if (!result.value.authorization_url || !result.value.flow_id) {
       setRowMessage({ name: serverName, message: result.value.error ?? "This server doesn't need authorization." });
       setBusyName(null);
       return;
     }
     rememberMcpWorkspace(workspace.id);
+    rememberMcpFlow(result.value.flow_id);
     window.location.href = result.value.authorization_url;
   };
 
