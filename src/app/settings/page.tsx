@@ -266,15 +266,25 @@ function ConnectorsSection() {
   const { workspace } = useWorkspace();
   const { connectors, loading, error, startAuthorize, disconnect } = useConnectors();
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ provider: string; message: string } | null>(null);
 
-  const handleConnect = async (provider: string) => {
+  const handleConnect = async (connector: (typeof connectors)[number]) => {
     if (!workspace) return;
-    setBusyProvider(provider);
     setActionError(null);
-    const result = await startAuthorize(provider);
+    if (!connector.configured) {
+      // Clicking still does something real - no dead disabled button - it
+      // just can't reach the provider yet without a real OAuth app on the
+      // server. Same message the backend itself would 503 with.
+      setActionError({
+        provider: connector.provider,
+        message: `${connector.name} has no OAuth app configured on this server yet. Ask the workspace owner to add its client ID and secret.`,
+      });
+      return;
+    }
+    setBusyProvider(connector.provider);
+    const result = await startAuthorize(connector.provider);
     if (!result.ok) {
-      setActionError(result.error);
+      setActionError({ provider: connector.provider, message: result.error });
       setBusyProvider(null);
       return;
     }
@@ -286,7 +296,7 @@ function ConnectorsSection() {
     setBusyProvider(provider);
     setActionError(null);
     const result = await disconnect(provider);
-    if (!result.ok) setActionError(result.error);
+    if (!result.ok) setActionError({ provider, message: result.error });
     setBusyProvider(null);
   };
 
@@ -297,8 +307,8 @@ function ConnectorsSection() {
         <p className="mt-1 max-w-2xl text-[13px] leading-6 text-foreground/55">
           Real OAuth connections to other services this workspace can use as tools, separate from
           your API providers above. Each one needs a real OAuth app registered on the server
-          before Connect will do anything - see the setup notes below a card that isn&apos;t
-          configured yet.
+          before it can actually connect - clicking Connect on one that isn&apos;t configured yet
+          explains what&apos;s missing.
         </p>
       </div>
 
@@ -309,48 +319,51 @@ function ConnectorsSection() {
       ) : (
         <div className="flex flex-col gap-2">
           {connectors.map((connector) => (
-            <div key={connector.provider} className={cn(paper, "flex items-center gap-3 rounded-2xl p-3")}>
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.06]">
-                <ProviderLogo provider={connector.name} className="size-3.5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] text-foreground/90">{connector.name}</p>
-                <p className={cn(mono, "truncate", connector.connected ? "text-status-healthy" : "text-foreground/35")}>
-                  {connector.connected
-                    ? `Connected${connector.account_label ? ` · ${connector.account_label}` : ""}`
-                    : connector.configured
-                      ? "Not connected"
-                      : "Not configured on this server yet"}
-                </p>
+            <div key={connector.provider} className="flex flex-col gap-1.5">
+              <div className={cn(paper, "flex items-center gap-3 rounded-2xl p-3")}>
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.06]">
+                  <ProviderLogo provider={connector.name} className="size-3.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13.5px] text-foreground/90">{connector.name}</p>
+                  <p className={cn(mono, "truncate", connector.connected ? "text-status-healthy" : "text-foreground/35")}>
+                    {connector.connected
+                      ? `Connected${connector.account_label ? ` · ${connector.account_label}` : ""}`
+                      : connector.configured
+                        ? "Not connected"
+                        : "Not configured on this server yet"}
+                  </p>
+                </div>
+                {connector.connected ? (
+                  <button
+                    type="button"
+                    aria-label={`Disconnect ${connector.name}`}
+                    onClick={() => void handleDisconnect(connector.provider)}
+                    disabled={busyProvider === connector.provider}
+                    className={cn(ghostButton, "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium disabled:opacity-50")}
+                  >
+                    <Unplug className="size-3.5" />
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleConnect(connector)}
+                    disabled={busyProvider === connector.provider}
+                    className={cn(inkButton, "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium disabled:opacity-50")}
+                  >
+                    <LinkIcon className="size-3.5" />
+                    {busyProvider === connector.provider ? "Connecting..." : "Connect"}
+                  </button>
+                )}
               </div>
-              {connector.connected ? (
-                <button
-                  type="button"
-                  aria-label={`Disconnect ${connector.name}`}
-                  onClick={() => void handleDisconnect(connector.provider)}
-                  disabled={busyProvider === connector.provider}
-                  className={cn(ghostButton, "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium disabled:opacity-50")}
-                >
-                  <Unplug className="size-3.5" />
-                  Disconnect
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void handleConnect(connector.provider)}
-                  disabled={!connector.configured || busyProvider === connector.provider}
-                  title={connector.configured ? undefined : `${connector.name} has no OAuth app configured on this server yet.`}
-                  className={cn(inkButton, "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium disabled:opacity-40")}
-                >
-                  <LinkIcon className="size-3.5" />
-                  {busyProvider === connector.provider ? "Connecting..." : "Connect"}
-                </button>
+              {actionError?.provider === connector.provider && (
+                <p className="px-1 text-[12.5px] leading-snug text-destructive/80">{actionError.message}</p>
               )}
             </div>
           ))}
         </div>
       )}
-      {actionError && <p className="text-[12.5px] leading-snug text-destructive/80">{actionError}</p>}
     </section>
   );
 }
