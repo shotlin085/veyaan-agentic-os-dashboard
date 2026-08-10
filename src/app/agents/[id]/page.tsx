@@ -69,7 +69,7 @@ export default function AgentDetailPage({ params }: { params: { id: string } }) 
   if (!session?.access_token || !workspace?.id) {
     return (
       <div className="mx-auto max-w-5xl pb-12">
-        <EmptyState title="Connect a workspace" description="Sign in with Supabase and select an active workspace from the top bar." locked />
+        <EmptyState title="Connect a workspace" description="Sign in with Supabase and select an active workspace from the sidebar." locked />
       </div>
     );
   }

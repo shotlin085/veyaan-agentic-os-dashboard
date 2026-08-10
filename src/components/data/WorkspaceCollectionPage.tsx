@@ -27,7 +27,7 @@ export function WorkspaceCollectionPage({ kind, title, description }: { kind: Co
       {connected && <div className="flex items-center gap-2">{isAgents && <Link href="/agents/factory"><Button size="sm">Create agent</Button></Link>}<Button variant="secondary" size="sm" onClick={() => window.location.reload()} disabled={loading}><RefreshCw className={loading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />Refresh</Button></div>}
     </header>
     <p className="max-w-2xl text-sm leading-6 text-text-muted">{description}</p>
-    {!connected ? <Card><EmptyState title="Connect a workspace" description="Sign in with Supabase and select an active workspace from the top bar. This screen will then load real records." locked /></Card>
+    {!connected ? <Card><EmptyState title="Connect a workspace" description="Sign in with Supabase and select an active workspace from the sidebar. This screen will then load real records." locked /></Card>
       : error ? <Card><EmptyState title="Workspace data could not load" description={error} /></Card>
       : loading ? <div className="grid gap-4 md:grid-cols-2"><Card className="h-32 animate-pulse" /><Card className="h-32 animate-pulse" /></div>
       : records.length === 0 ? <Card><EmptyState title={`No ${label} yet`} description={`This workspace returned no ${label}. Create or provision the first one through the connected service.`} action={isAgents ? "Create agent" : undefined} onAction={isAgents ? () => { window.location.href = "/agents/factory"; } : undefined} /></Card>

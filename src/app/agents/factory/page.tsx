@@ -45,7 +45,7 @@ export default function AgentFactoryPage() {
       <div className="mx-auto max-w-4xl pb-12">
         <EmptyState
           title="Connect a workspace"
-          description="Sign in with Supabase and select an active workspace from the top bar before creating an agent."
+          description="Sign in with Supabase and select an active workspace from the sidebar before creating an agent."
           locked
         />
       </div>

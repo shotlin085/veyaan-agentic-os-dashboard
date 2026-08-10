@@ -11,6 +11,8 @@ export interface HermesConversation {
   title: string | null;
   status: string;
   channel: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface UseHermesConversationsResult {
@@ -57,6 +59,7 @@ export function useHermesConversations(): UseHermesConversationsResult {
       const payload = await response.json().catch(() => ([]));
       if (!response.ok) throw new Error(String((payload as { detail?: string; error?: string }).detail ?? (payload as { error?: string }).error ?? "Conversation list failed."));
       const list = Array.isArray(payload) ? (payload as HermesConversation[]) : [];
+      list.sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
       setConversations(list);
       setError(null);
     } catch (cause) {

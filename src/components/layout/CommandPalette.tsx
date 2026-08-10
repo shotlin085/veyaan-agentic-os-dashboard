@@ -1,142 +1,91 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { 
-  Search, 
-  Command, 
-  Bot, 
-  Briefcase, 
-  GitFork, 
-  CheckCircle2, 
-  ShieldAlert, 
-  X, 
-  ArrowRight,
-  Terminal,
-  Database,
-  Coins
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CommandPalette as CommandPaletteElement, type PaletteCommand } from "@/components/elements/command-palette";
+import { useConversations } from "@/components/assistant/runtime/ConversationProvider";
 
-interface CommandPaletteProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onOpenEmergencyStop: () => void;
-}
+const STATIC_COMMANDS: PaletteCommand[] = [
+  { id: "nav-chat", label: "Go to Chat", group: "Navigate", keys: ["G", "C"] },
+  { id: "nav-agents", label: "Go to Agents", group: "Navigate", keys: [] },
+  { id: "nav-workflows", label: "Go to Workflows", group: "Navigate", keys: [] },
+  { id: "nav-memory", label: "Go to Memory", group: "Navigate", keys: [] },
+  { id: "nav-approvals", label: "Go to Approvals", group: "Navigate", keys: [] },
+  { id: "nav-qa", label: "Go to QA", group: "Navigate", keys: [] },
+  { id: "nav-logs", label: "Go to Logs", group: "Navigate", keys: [] },
+  { id: "nav-voice", label: "Go to Voice", group: "Navigate", keys: [] },
+  { id: "nav-settings", label: "Go to Settings", group: "Navigate", keys: [] },
+  { id: "new-chat", label: "Start a new chat", group: "Actions", keys: ["⌘", "N"] },
+];
 
-export const CommandPalette: React.FC<CommandPaletteProps> = ({
-  isOpen,
-  onClose,
-  onOpenEmergencyStop,
-}) => {
+const ROUTES: Record<string, string> = {
+  "nav-chat": "/",
+  "nav-agents": "/agents",
+  "nav-workflows": "/workflows",
+  "nav-memory": "/memory",
+  "nav-approvals": "/approvals",
+  "nav-qa": "/qa",
+  "nav-logs": "/logs",
+  "nav-voice": "/voice",
+  "nav-settings": "/settings",
+};
+
+/**
+ * App-wide Cmd+K, replacing the old TopBar-anchored palette. Owns its own
+ * open state and key listener so it can live directly in AppShell with no
+ * TopBar to host a trigger button.
+ */
+export function CommandPalette() {
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeId, setActiveId] = useState(STATIC_COMMANDS[0]!.id);
   const router = useRouter();
+  const { createConversation } = useConversations();
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        if (isOpen) onClose();
-        else {
-          // Open handled by parent or state
-        }
-      }
-      if (e.key === "Escape" && isOpen) {
-        onClose();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setOpen((current) => !current);
+      } else if (event.key === "Escape" && open) {
+        setOpen(false);
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
-  if (!isOpen) return null;
+  const commands = useMemo(() => STATIC_COMMANDS, []);
 
-  const quickActions = [
-    { name: "Ask Personal Assistant (Hermes)", href: "/assistant", icon: Bot, group: "Actions" },
-    { name: "Create New AI Project", href: "/projects", icon: Briefcase, group: "Actions" },
-    { name: "Open Visual Workflow Builder", href: "/workflows", icon: GitFork, group: "Actions" },
-    { name: "Review Pending Approvals (2)", href: "/approvals", icon: CheckCircle2, group: "Actions" },
-    { name: "Inspect Live Observability Logs", href: "/logs", icon: Terminal, group: "Observability" },
-    { name: "Search RAG Memory Console", href: "/memory", icon: Database, group: "Data" },
-    { name: "Inspect Model Usage & Cost Routing", href: "/costs", icon: Coins, group: "Operations" },
-    { name: "TRIGGER EMERGENCY STOP", action: onOpenEmergencyStop, icon: ShieldAlert, danger: true, group: "Emergency" },
-  ];
+  if (!open) return null;
 
-  const filtered = quickActions.filter(action =>
-    action.name.toLowerCase().includes(query.toLowerCase())
-  );
+  const run = (id: string) => {
+    setOpen(false);
+    setQuery("");
+    if (id === "new-chat") {
+      void createConversation();
+      router.push("/");
+      return;
+    }
+    const href = ROUTES[id];
+    if (href) router.push(href);
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-start justify-center pt-20 px-4">
-      <div 
-        className="w-full max-w-2xl bg-bg-surface-1 border border-border-glow rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Search Input Bar */}
-        <div className="h-14 px-4 border-b border-border-subtle flex items-center gap-3 bg-bg-surface-2/60">
-          <Search className="w-5 h-5 text-accent-cyan" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command, project, agent, or ask Hermes..."
-            className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-            autoFocus
-          />
-          <button onClick={onClose} className="p-1 rounded text-text-muted hover:text-text-primary">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Results List */}
-        <div className="max-h-96 overflow-y-auto p-2 space-y-1">
-          {filtered.length === 0 ? (
-            <div className="p-6 text-center text-xs text-text-muted">
-              No matching commands found for “{query}”. Try typing “Assistant”, “Workflow”, or “Emergency”.
-            </div>
-          ) : (
-            filtered.map((item, idx) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    if (item.action) {
-                      item.action();
-                    } else if (item.href) {
-                      router.push(item.href);
-                    }
-                    onClose();
-                  }}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg text-xs transition-all group ${
-                    item.danger
-                      ? "bg-status-danger/10 text-status-danger hover:bg-status-danger hover:text-white border border-status-danger/30"
-                      : "text-text-primary hover:bg-bg-surface-2 hover:text-accent-cyan border border-transparent hover:border-border-subtle"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon className={`w-4 h-4 ${item.danger ? "text-status-danger" : "text-text-muted group-hover:text-accent-cyan"}`} />
-                    <span className="font-medium">{item.name}</span>
-                  </div>
-                  <div className="flex items-center gap-1 font-mono text-[10px] text-text-muted group-hover:text-text-primary">
-                    <span>Execute</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="h-10 px-4 border-t border-border-subtle bg-bg-surface-2/40 flex items-center justify-between font-mono text-[10px] text-text-muted">
-          <div className="flex items-center gap-2">
-            <span>Use ↑↓ to navigate</span>
-            <span>•</span>
-            <span>ESC to close</span>
-          </div>
-          <div className="text-accent-cyan">VEYAAN Agentic OS Palette</div>
-        </div>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
+      onClick={() => setOpen(false)}
+    >
+      <div onClick={(event) => event.stopPropagation()}>
+        <CommandPaletteElement
+          commands={commands}
+          query={query}
+          activeId={activeId}
+          onQueryChange={setQuery}
+          onActiveChange={setActiveId}
+          onRun={run}
+        />
       </div>
     </div>
   );
-};
+}
