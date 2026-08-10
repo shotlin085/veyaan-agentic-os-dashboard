@@ -12,6 +12,7 @@ import {
   ThreadPrimitive,
   useAui,
   useAuiState,
+  type ToolCallMessagePartProps,
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -40,6 +41,7 @@ import {
 } from "@/components/elements/empty-state";
 import { ThinkingIndicator } from "@/components/elements/thinking-indicator";
 import { ErrorState as ErrorStateCard } from "@/components/elements/error-state";
+import { ToolCall } from "@/components/elements/tool-call";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 
 const STARTER_PROMPTS = [
@@ -48,6 +50,67 @@ const STARTER_PROMPTS = [
   "What agents are available here?",
   "What can Hermes actually do right now?",
 ];
+
+/**
+ * Hermes identifies tools by their raw name (web_search, browser_click,
+ * terminal, ...) with no separate human-readable verb - the ToolCall
+ * element wants a present/past-tense pair (activeLabel/label). Covers the
+ * toolsets most likely to actually fire (web, browser, terminal, file,
+ * code_execution, memory, todo, delegation, cronjob); anything unlisted
+ * falls back to a humanized version of the raw name rather than needing
+ * an entry for all ~56 real Hermes tools up front.
+ */
+const TOOL_VERBS: Record<string, { active: string; done: string }> = {
+  web_search: { active: "Searching the web", done: "Searched the web" },
+  web_extract: { active: "Reading a page", done: "Read a page" },
+  browser_navigate: { active: "Opening a page", done: "Opened a page" },
+  browser_click: { active: "Clicking", done: "Clicked" },
+  browser_type: { active: "Typing", done: "Typed" },
+  browser_snapshot: { active: "Looking at the page", done: "Looked at the page" },
+  terminal: { active: "Running a command", done: "Ran a command" },
+  file_read: { active: "Reading a file", done: "Read a file" },
+  file_write: { active: "Writing a file", done: "Wrote a file" },
+  code_execution: { active: "Running code", done: "Ran code" },
+  image_gen: { active: "Generating an image", done: "Generated an image" },
+  memory: { active: "Checking memory", done: "Checked memory" },
+  todo: { active: "Updating the plan", done: "Updated the plan" },
+  delegation: { active: "Delegating a task", done: "Delegated a task" },
+  cronjob: { active: "Scheduling a job", done: "Scheduled a job" },
+};
+
+function humanizeToolName(toolName: string): { active: string; done: string } {
+  const known = TOOL_VERBS[toolName];
+  if (known) return known;
+  const words = toolName.replace(/[_-]+/g, " ").trim();
+  const label = words ? words.charAt(0).toUpperCase() + words.slice(1) : "Tool";
+  return { active: label, done: label };
+}
+
+const BoundToolCall: FC<ToolCallMessagePartProps> = (part) => {
+  const [open, setOpen] = useState(false);
+  const running = !part.status || part.status.type === "running";
+  const verbs = humanizeToolName(part.toolName);
+  const resultText = part.isError
+    ? "Failed"
+    : typeof part.result === "string"
+      ? part.result
+      : running
+        ? ""
+        : "Done";
+
+  return (
+    <ToolCall
+      label={verbs.done}
+      activeLabel={verbs.active}
+      query={part.argsText}
+      request={part.argsText || "(no arguments captured)"}
+      result={resultText}
+      running={running}
+      open={open}
+      onOpenChange={setOpen}
+    />
+  );
+};
 
 /**
  * The real, wired thread: composer, message list, streaming, edit,
@@ -202,11 +265,13 @@ const AssistantMessage: FC = () => {
 
   return (
     <MessagePrimitive.Root className="group/message flex w-full flex-col gap-1.5">
-      <div className="text-sm leading-relaxed text-foreground">
+      <div className="flex flex-col gap-2 text-sm leading-relaxed text-foreground">
         {isEmptyRunning ? (
           <ThinkingIndicator label="Thinking" />
         ) : (
-          <MessagePrimitive.Content components={{ Text: MarkdownText }} />
+          <MessagePrimitive.Content
+            components={{ Text: MarkdownText, tools: { Fallback: BoundToolCall } }}
+          />
         )}
         <MessagePrimitive.Error>
           <ErrorPrimitive.Root asChild>
