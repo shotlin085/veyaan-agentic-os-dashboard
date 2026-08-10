@@ -26,14 +26,11 @@ interface UseHermesConversationsResult {
 
 /**
  * Manages the list of real Hermes conversations for the active workspace
- * and which one is "active" in this browser tab. There is deliberately no
- * ThreadHistoryAdapter wired to this yet - Hermes has no message-history
- * endpoint (only create/list/get on the conversation itself), so switching
- * to a conversation that wasn't started in this session shows a blank
- * thread rather than a fabricated one. `assistant-thread-id` in
- * sessionStorage keeps the active thread stable across a page navigation
- * within the same tab (not a refresh - refresh always starts fresh, since
- * there's nothing real to restore yet).
+ * and which one is "active" in this browser tab. Switching conversations
+ * (or refreshing the page) now restores real history via
+ * hermes-history-adapter.ts's GET .../messages call - there is no local
+ * caching here, so every switch is a fresh fetch, not an optimistic or
+ * stale read.
  */
 export function useHermesConversations(): UseHermesConversationsResult {
   const { session } = useAuth();
