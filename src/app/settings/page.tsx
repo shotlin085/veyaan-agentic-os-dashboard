@@ -9,6 +9,7 @@ import { field, ghostButton, inkButton, mono, paper } from "@/components/element
 import { cn } from "@/lib/utils";
 import { useDefaultModel, useProviders } from "@/components/assistant/runtime/hermes-providers";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
+import { useHermesToolsets } from "@/components/assistant/runtime/hermes-toolsets";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 
 // Best-effort brand match from a provider's base URL, purely for showing
@@ -26,68 +27,24 @@ function guessProviderBrand(baseUrl: string): string {
   return "";
 }
 
-interface RawToolset {
-  name: string;
-  label: string;
-  description: string;
-  enabled: boolean;
-  configured: boolean;
-  tools: string[];
-}
-
 /**
  * Real Hermes toolsets (BE-4's /workspaces/{id}/hermes/toolsets
- * passthrough - see the new API route this page calls). No onAuthorize
- * handler is wired: there's no endpoint to flip a toolset's enabled state
- * from here, so showing an "Authorize" button would be decorative. This
- * is read-only, honestly.
+ * passthrough - see useHermesToolsets, shared with the composer's
+ * PluginsButton popover). No onAuthorize handler is wired: there's no
+ * endpoint to flip a toolset's enabled state from here, so showing an
+ * "Authorize" button would be decorative. This is read-only, honestly.
  */
 export default function SettingsPage() {
   const { session } = useAuth();
   const { workspace } = useWorkspace();
-  const [toolsets, setToolsets] = useState<RawToolset[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { toolsets, loading, error } = useHermesToolsets();
   const [expandedId, setExpandedId] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    const token = session?.access_token;
-    const workspaceId = workspace?.id;
-    if (!token || !workspaceId) {
-      setToolsets(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetch(`/api/workspaces/${workspaceId}/hermes/toolsets`, {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(String(payload.detail ?? payload.error ?? "Toolsets request failed."));
-        return payload as { data?: RawToolset[] };
-      })
-      .then((payload) => {
-        if (!cancelled) setToolsets(payload.data ?? []);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "Toolsets request failed.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.access_token, workspace?.id]);
-
-  const servers: McpServer[] = (toolsets ?? []).map((toolset) => ({
+  const servers: McpServer[] = toolsets.map((toolset) => ({
     id: toolset.name,
     name: toolset.label,
     transport: toolset.description,
-    status: toolset.enabled ? "connected" : "failed",
+    status: toolset.enabled ? "connected" : toolset.configured ? "needs-auth" : "failed",
     tools: toolset.tools,
   }));
 
@@ -126,7 +83,7 @@ export default function SettingsPage() {
             </div>
             {error ? (
               <p className="text-[13px] leading-snug text-destructive/80">{error}</p>
-            ) : loading && !toolsets ? (
+            ) : loading && toolsets.length === 0 ? (
               <p className={cn(mono, "text-foreground/35")}>Loading toolsets...</p>
             ) : (
               <McpServerPanel

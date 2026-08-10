@@ -19,6 +19,7 @@ import {
   ArrowDownIcon,
   BrainIcon,
   CheckIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
@@ -27,9 +28,11 @@ import {
   ListChecksIcon,
   PencilIcon,
   RefreshCwIcon,
+  SettingsIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
@@ -64,6 +67,7 @@ import {
 } from "@/components/elements/composer";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
+import { useHermesToolsets } from "@/components/assistant/runtime/hermes-toolsets";
 import { useReasoningModels } from "@/components/assistant/runtime/hermes-reasoning-models";
 import { useProviders } from "@/components/assistant/runtime/hermes-providers";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
@@ -650,7 +654,7 @@ const Composer: FC = () => {
           }}
         />
         <ComposerToolbar>
-          <ComposerAttachButton title="File attachments aren't supported by Hermes yet" />
+          <PluginsButton />
           <ComposerActions>
             <ModelPickerButton />
             <PlanToggleButton />
@@ -662,6 +666,116 @@ const Composer: FC = () => {
         </ComposerToolbar>
       </ComposerBar>
     </ComposerPrimitive.Root>
+  );
+};
+
+const TOOLSET_STATUS_DOT: Record<"healthy" | "off" | "unavailable", string> = {
+  healthy: "bg-status-healthy",
+  off: "bg-status-warning",
+  unavailable: "bg-foreground/20",
+};
+
+const TOOLSET_STATUS_LABEL: Record<"healthy" | "off" | "unavailable", string> = {
+  healthy: "connected",
+  off: "off",
+  unavailable: "not configured",
+};
+
+function toolsetStatus(toolset: { enabled: boolean; configured: boolean }): "healthy" | "off" | "unavailable" {
+  if (toolset.enabled) return "healthy";
+  if (toolset.configured) return "off";
+  return "unavailable";
+}
+
+/**
+ * The real "what does Hermes have" panel, ChatGPT/Claude connectors-style,
+ * opened from the composer's + button (real attachments were never
+ * wireable - see the button's old disabled tooltip - so this is what that
+ * button does now instead of sitting decorative). Real data only:
+ * GET .../hermes/toolsets, the same real 28 toolsets Settings shows,
+ * shared via useHermesToolsets so the two views can never disagree. The
+ * status dot is real, live signal from Hermes itself (enabled+configured),
+ * not a synthetic health check - green means Hermes can actually call it
+ * right now, amber means it's configured but turned off, gray/red means
+ * no real credentials exist for it yet.
+ */
+const PluginsButton: FC = () => {
+  const { toolsets, loading, error } = useHermesToolsets();
+  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const healthyCount = toolsets.filter((t) => t.enabled).length;
+
+  return (
+    <div ref={rootRef} className="relative">
+      <ComposerAttachButton onClick={() => setOpen((v) => !v)} title="Plugins & tools" aria-label="Plugins & tools" />
+      <ComposerMenu open={open} align="start" className="max-h-[28rem] w-80 overflow-y-auto">
+        <div className="flex items-center justify-between px-2.5 pb-1.5 pt-1">
+          <span className={cn(mono, "text-foreground/35")}>Plugins & tools</span>
+          <span className={cn(mono, "text-foreground/35 tabular-nums")}>
+            {loading ? "loading..." : `${healthyCount}/${toolsets.length} connected`}
+          </span>
+        </div>
+        {error && <p className="px-2.5 py-2 text-[12.5px] leading-snug text-destructive/80">{error}</p>}
+        {!error && !loading && toolsets.length === 0 && (
+          <p className={cn(mono, "text-foreground/35 px-2.5 py-2")}>No toolsets available yet.</p>
+        )}
+        {toolsets.map((toolset) => {
+          const status = toolsetStatus(toolset);
+          const isExpanded = expanded === toolset.name;
+          return (
+            <div key={toolset.name} className="flex flex-col">
+              <ComposerMenuItem active={isExpanded} onClick={() => setExpanded(isExpanded ? null : toolset.name)}>
+                <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", TOOLSET_STATUS_DOT[status])} />
+                <span className="flex-1 truncate text-start">{toolset.label}</span>
+                <span className={cn(mono, "text-foreground/30 tabular-nums")}>{toolset.tools.length}</span>
+                <ChevronDownIcon
+                  className={cn("size-3 shrink-0 text-foreground/30 transition-transform", isExpanded && "rotate-180")}
+                />
+              </ComposerMenuItem>
+              {isExpanded && (
+                <div className="mb-1 flex flex-col gap-1.5 rounded-xl bg-foreground/[0.03] px-3 py-2.5 text-[12px]">
+                  <p className="text-foreground/55">{toolset.description}</p>
+                  <p className={cn(mono, "text-foreground/35")}>{TOOLSET_STATUS_LABEL[status]}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {toolset.tools.map((tool) => (
+                      <span key={tool} className={cn(mono, "text-foreground/45 rounded bg-foreground/[0.06] px-1.5 py-0.5")}>
+                        {tool}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <Link
+          href="/settings"
+          onClick={() => setOpen(false)}
+          className="mt-1 flex items-center gap-2 rounded-[10px] border-t border-border px-2.5 pt-2.5 pb-1 text-[12.5px] text-foreground/45 transition-colors hover:text-foreground/80"
+        >
+          <SettingsIcon className="size-3.5" />
+          Manage in Settings
+        </Link>
+      </ComposerMenu>
+    </div>
   );
 };
 

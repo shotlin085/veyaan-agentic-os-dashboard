@@ -104,14 +104,21 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
 
-  /* Exactly two hues survive in the whole app: destructive/danger red and
-     warning amber. success/working/waiting carry meaning through weight
-     and opacity instead of color, the way ChatGPT/Claude do it. */
+  /* Two hues carry the whole app: destructive/danger red and warning
+     amber. success/working/waiting carry meaning through weight and
+     opacity instead of color, the way ChatGPT/Claude do it.
+
+     --color-status-healthy is a deliberate, narrow third hue - real
+     green, explicitly requested for the plugins/connectors health dot
+     (bindings/PluginsPanel.tsx) to match ChatGPT/Claude's own connector
+     UI convention. Scoped to that one use, not a reopening of the
+     cyan/purple theme this whole redesign replaced. */
   --color-status-success: var(--foreground);
   --color-status-warning: oklch(0.72 0.12 75);
   --color-status-danger: var(--destructive);
   --color-status-working: var(--muted-foreground);
   --color-status-waiting: var(--muted-foreground);
+  --color-status-healthy: oklch(0.72 0.15 145);
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
