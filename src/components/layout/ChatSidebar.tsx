@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Bot,
   CheckCircle2,
@@ -53,11 +53,10 @@ function dayGroup(iso: string): string {
  * thread list from Hermes), the rest of the app hangs off a compact
  * disclosure underneath. Global (mounted once in AppShell), not scoped to
  * the chat page, so switching threads or starting a new one works from
- * anywhere and routes back to "/".
+ * anywhere and routes to that conversation's own /c/[id] URL.
  */
 export function ChatSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { conversations, activeId, loading, error, selectById, createConversation } = useConversations();
   const { user, signOut } = useAuth();
   const { workspaces, workspace, selectWorkspace } = useWorkspace();
@@ -77,19 +76,12 @@ export function ChatSidebar() {
     [conversations],
   );
 
-  const goToChat = () => {
-    if (pathname !== "/") router.push("/");
-  };
-
   return (
     <aside className="hidden h-[calc(100dvh)] w-[260px] shrink-0 flex-col border-r border-border bg-popover lg:flex">
       <div className="flex flex-col gap-2 p-3">
         <button
           type="button"
-          onClick={() => {
-            goToChat();
-            void createConversation();
-          }}
+          onClick={() => void createConversation()}
           className={cn(inkButton, "flex h-9 items-center justify-center gap-2 rounded-xl text-[13px] font-medium")}
         >
           <PlusIcon className="size-3.5" />
@@ -124,10 +116,7 @@ export function ChatSidebar() {
             query={query}
             activeId={activeId ?? ""}
             onQueryChange={setQuery}
-            onSelect={(id) => {
-              selectById(id);
-              goToChat();
-            }}
+            onSelect={(id) => selectById(id)}
             className="w-full max-w-none rounded-none bg-transparent p-0 shadow-none dark:bg-transparent dark:shadow-none"
           />
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC, useState } from "react";
+import { type FC, useEffect, useRef, useState } from "react";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -16,7 +16,6 @@ import {
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
-  ArrowUpIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -24,9 +23,7 @@ import {
   DownloadIcon,
   EllipsisIcon,
   PencilIcon,
-  PlusIcon,
   RefreshCwIcon,
-  SquareIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
 } from "lucide-react";
@@ -44,7 +41,20 @@ import { ErrorState as ErrorStateCard } from "@/components/elements/error-state"
 import { ToolCall } from "@/components/elements/tool-call";
 import { StoppedRun } from "@/components/elements/stopped-run";
 import { MessageQueue } from "@/components/elements/message-queue";
+import {
+  ComposerActions,
+  ComposerAttachButton,
+  ComposerBar,
+  ComposerMenu,
+  ComposerMenuItem,
+  ComposerModelTrigger,
+  ComposerSend,
+  ComposerToolbar,
+  ComposerVoiceButton,
+} from "@/components/elements/composer";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
+import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
+import { ProviderLogo } from "@/components/assistant/provider-logos";
 
 const STARTER_PROMPTS = [
   "What can you help me with?",
@@ -465,18 +475,21 @@ const MessageBranchPicker: FC = () => {
 };
 
 /**
- * Real composer bound to ComposerPrimitive. File attachments are
- * deliberately not wired: Hermes's message endpoint accepts only
- * {content: string} today, and there is no upload path anywhere in the
- * platform that a browser can reach - a picker that appeared to work
- * would silently drop whatever was attached. The attach button stays
- * visible (it's part of the composer's visual language) but disabled,
- * matching the honest state rather than faking support.
+ * Real composer bound to ComposerPrimitive, built from the real
+ * elements/composer.tsx pieces (ComposerBar/ComposerModelTrigger/
+ * ComposerVoiceButton/ComposerSend - the ChatGPT-shaped composer the
+ * Elements library actually ships) instead of one-off hand-rolled
+ * buttons. File attachments are deliberately not wired: Hermes's message
+ * endpoint accepts only {content: string} today, and there is no upload
+ * path anywhere in the platform that a browser can reach - a picker that
+ * appeared to work would silently drop whatever was attached. The attach
+ * button stays visible (it's part of the composer's visual language) but
+ * disabled, matching the honest state rather than faking support.
  */
 const Composer: FC = () => {
   return (
     <ComposerPrimitive.Root className="relative w-full max-w-3xl">
-      <div className={cn(paper, "flex w-full flex-col gap-2 rounded-[24px] p-2.5")}>
+      <ComposerBar>
         <ComposerPrimitive.Input
           placeholder="Message VEYAAN..."
           className="placeholder:text-foreground/35 min-h-11 max-h-48 w-full resize-none bg-transparent px-3 py-2 text-[15px] outline-none"
@@ -484,47 +497,136 @@ const Composer: FC = () => {
           autoFocus
           aria-label="Message input"
         />
-        <div className="flex items-center justify-between px-0.5">
-          <button
-            type="button"
-            aria-label="Add attachment"
-            disabled
-            className={cn(ghostButton, "size-8 disabled:pointer-events-none disabled:opacity-30")}
-            title="File attachments aren't supported by Hermes yet"
-          >
-            <PlusIcon className="size-4" />
-          </button>
-          <ComposerAction />
-        </div>
-      </div>
+        <ComposerToolbar>
+          <ComposerAttachButton title="File attachments aren't supported by Hermes yet" />
+          <ComposerActions>
+            <ModelPickerButton />
+            <DictationButton />
+            <ComposerSendAction />
+          </ComposerActions>
+        </ComposerToolbar>
+      </ComposerBar>
     </ComposerPrimitive.Root>
   );
 };
 
-const ComposerAction: FC = () => {
+/**
+ * Real per-message model choice, reaching the backend's session-based
+ * model-lock path (see hermes-adapter.ts and the orchestrator's
+ * SendMessageRequest.model) - not decorative. "Auto" (the default, no
+ * selection) keeps today's fast/escalate routing unchanged. Model prices
+ * and free/paid flags are Hermes's real catalog (GET .../hermes/model-
+ * options), not invented.
+ */
+const ModelPickerButton: FC = () => {
+  const aui = useAui();
+  const { models, loading } = useHermesModels();
+  const selectedId = useAuiState((s) => (s.composer.runConfig.custom?.model as string | undefined) ?? "");
+  const selectedModel = models.find((m) => m.id === selectedId);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
   return (
-    <div className="flex items-center gap-1.5">
+    <div ref={rootRef} className="relative">
+      <ComposerModelTrigger
+        model={selectedModel?.name ?? "Auto"}
+        open={open}
+        onClick={() => setOpen((value) => !value)}
+      />
+      <ComposerMenu open={open} align="start" className="max-h-96 overflow-y-auto">
+        <ComposerMenuItem
+          active={!selectedId}
+          onClick={() => {
+            aui.composer.setRunConfig({ custom: {} });
+            setOpen(false);
+          }}
+        >
+          <span className="flex-1 text-start">Auto</span>
+          <span className={cn(mono, "text-foreground/35")}>fast + research</span>
+          {!selectedId && <CheckIcon className="size-3.5" />}
+        </ComposerMenuItem>
+        {loading && <div className={cn(mono, "text-foreground/35 px-2.5 py-2")}>Loading models...</div>}
+        {models.map((model) => (
+          <ComposerMenuItem
+            key={model.id}
+            active={model.id === selectedId}
+            onClick={() => {
+              aui.composer.setRunConfig({ custom: { model: model.id } });
+              setOpen(false);
+            }}
+          >
+            <ProviderLogo provider={model.provider} className="size-3.5 shrink-0" />
+            <span className="flex-1 truncate text-start">{model.name}</span>
+            <span className={cn(mono, "text-foreground/35 tabular-nums")}>
+              {model.free ? "free" : model.inputPrice ?? ""}
+            </span>
+            {model.id === selectedId && <CheckIcon className="size-3.5 shrink-0" />}
+          </ComposerMenuItem>
+        ))}
+      </ComposerMenu>
+    </div>
+  );
+};
+
+/**
+ * Voice input via the browser's own SpeechRecognition API
+ * (WebSpeechDictationAdapter, wired in HermesRuntimeProvider.tsx) -
+ * speaking fills the composer text live, the same ComposerPrimitive.
+ * Dictate/StopDictation contract assistant-ui's own reference thread
+ * (src/components/assistant-ui/thread.tsx) already used. Hidden entirely
+ * when the browser has no SpeechRecognition support (thread.capabilities.
+ * dictation is only true once that adapter is actually configured).
+ */
+const DictationButton: FC = () => {
+  const dictationActive = useAuiState((s) => s.composer.dictation != null);
+
+  return (
+    <AuiIf condition={(s) => s.thread.capabilities.dictation}>
+      {dictationActive ? (
+        <ComposerPrimitive.StopDictation asChild>
+          <ComposerVoiceButton active aria-label="Stop voice input" />
+        </ComposerPrimitive.StopDictation>
+      ) : (
+        <ComposerPrimitive.Dictate asChild>
+          <ComposerVoiceButton active={false} aria-label="Start voice input" />
+        </ComposerPrimitive.Dictate>
+      )}
+    </AuiIf>
+  );
+};
+
+const ComposerSendAction: FC = () => {
+  const streaming = useAuiState((s) => s.thread.isRunning);
+  const idle = useAuiState((s) => s.composer.isEmpty);
+
+  return (
+    <>
       <AuiIf condition={(s) => !s.thread.isRunning}>
         <ComposerPrimitive.Send asChild>
-          <button
-            type="button"
-            aria-label="Send message"
-            className={cn(
-              "grid size-8 place-items-center rounded-full transition-colors",
-              inkButton,
-            )}
-          >
-            <ArrowUpIcon className="size-4" />
-          </button>
+          <ComposerSend streaming={false} idle={idle} aria-label="Send message" />
         </ComposerPrimitive.Send>
       </AuiIf>
       <AuiIf condition={(s) => s.thread.isRunning}>
         <ComposerPrimitive.Cancel asChild>
-          <button type="button" aria-label="Stop generating" className={cn(inkButton, "grid size-8 place-items-center rounded-full")}>
-            <SquareIcon className="size-3 fill-current" />
-          </button>
+          <ComposerSend streaming={streaming} idle={idle} aria-label="Stop generating" />
         </ComposerPrimitive.Cancel>
       </AuiIf>
-    </div>
+    </>
   );
 };

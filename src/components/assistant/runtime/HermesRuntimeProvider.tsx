@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useMemo } from "react";
-import { AssistantRuntimeProvider, useLocalRuntime } from "@assistant-ui/react";
+import { AssistantRuntimeProvider, useLocalRuntime, WebSpeechDictationAdapter } from "@assistant-ui/react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
 import { createHermesAdapter } from "./hermes-adapter";
@@ -36,10 +36,22 @@ function HermesRuntimeMount({ conversation, children }: HermesRuntimeProviderPro
 
   const adapter = useMemo(() => createHermesAdapter(runtimeConfig), [runtimeConfig]);
   const history = useMemo(() => createHermesHistoryAdapter(runtimeConfig), [runtimeConfig]);
+  // Real browser speech-to-text (native SpeechRecognition/webkitSpeech
+  // Recognition, no backend involved) - only registered when the browser
+  // actually supports it, so thread.capabilities.dictation (and the mic
+  // button gated on it in bindings/Thread.tsx) reflects real support
+  // instead of always claiming it.
+  const dictation = useMemo(
+    () => (WebSpeechDictationAdapter.isSupported() ? new WebSpeechDictationAdapter() : undefined),
+    [],
+  );
   // Lets a message typed while a run is in flight queue instead of being
   // blocked or silently discarded - real assistant-ui capability, no
   // backend change needed (see bindings/Thread.tsx's QueuePanel).
-  const runtime = useLocalRuntime(adapter, { adapters: { history }, unstable_enableMessageQueue: true });
+  const runtime = useLocalRuntime(adapter, {
+    adapters: { history, dictation },
+    unstable_enableMessageQueue: true,
+  });
 
   return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
 }

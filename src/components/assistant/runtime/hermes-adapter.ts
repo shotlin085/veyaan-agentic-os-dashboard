@@ -11,7 +11,7 @@ type HermesStreamEvent =
   | { event: "assistant.message.completed"; content?: string; finish_reason?: string | null }
   | { event: "runtime.failed"; error?: string }
   | { event: "assistant.usage"; prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-  | { event: "assistant.route"; path?: "fast" | "escalated"; model?: string }
+  | { event: "assistant.route"; path?: "fast" | "escalated" | "model"; model?: string }
   | {
       event: "assistant.tool.progress";
       tool?: string;
@@ -42,7 +42,7 @@ export interface HermesUsage {
 }
 
 export interface HermesRoute {
-  path?: "fast" | "escalated";
+  path?: "fast" | "escalated" | "model";
   model?: string;
 }
 
@@ -64,8 +64,14 @@ function lastUserMessageText(messages: readonly ThreadMessage[]): string {
  */
 export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapter {
   return {
-    async *run({ messages, abortSignal }) {
+    async *run({ messages, abortSignal, runConfig }) {
       const content = lastUserMessageText(messages);
+      // Set via aui.composer.setRunConfig({custom:{model}}) by the
+      // composer's model picker (bindings/Thread.tsx's ModelPickerButton).
+      // Absent/undefined ("Auto") keeps the orchestrator's existing fast/
+      // escalate routing; a real model id bypasses it for a session
+      // locked to that model (SendMessageRequest.model on the backend).
+      const model = typeof runConfig.custom?.model === "string" ? runConfig.custom.model : undefined;
 
       if (!config.workspaceId || !config.conversationId || !config.token) {
         yield {
@@ -78,7 +84,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${config.token}` },
-        body: JSON.stringify({ workspaceId: config.workspaceId, conversationId: config.conversationId, content }),
+        body: JSON.stringify({ workspaceId: config.workspaceId, conversationId: config.conversationId, content, model }),
         signal: abortSignal,
       }).catch(() => null);
 

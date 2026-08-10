@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, type FC, type ReactNode } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useHermesConversations, type HermesConversation } from "./hermes-conversations";
 
 interface ConversationContextValue {
@@ -21,22 +22,32 @@ const ConversationContext = createContext<ConversationContextValue | null>(null)
  * conversation is active - previously each mounted its own hook instance,
  * which would have desynced the moment the sidebar became app-wide instead
  * of local to /assistant.
+ *
+ * The active conversation id lives in the URL (/c/[conversationId]), not
+ * in React state - selectById/createConversation navigate there instead
+ * of setting local state, so a refresh, a bookmark, or the browser's
+ * back/forward buttons all land on the real conversation instead of
+ * whichever one this provider happened to have picked last time.
  */
 export const ConversationProvider: FC<{ children: ReactNode }> = ({ children }) => {
+  const router = useRouter();
+  const params = useParams<{ conversationId?: string }>();
   const hook = useHermesConversations();
-  const activeConversation = hook.conversations.find((c) => c.id === hook.activeId) ?? null;
+  const activeId = params?.conversationId ?? null;
+  const activeConversation = hook.conversations.find((c) => c.id === activeId) ?? null;
 
   const value: ConversationContextValue = {
     loading: hook.loading,
     error: hook.error,
     conversations: hook.conversations,
-    activeId: hook.activeId,
+    activeId,
     activeConversation,
-    selectById: (id) => {
-      const index = hook.conversations.findIndex((c) => c.id === id);
-      if (index !== -1) hook.selectByIndex(index);
+    selectById: (id) => router.push(`/c/${id}`),
+    createConversation: async () => {
+      const id = await hook.createConversation();
+      if (id) router.push(`/c/${id}`);
+      return id;
     },
-    createConversation: hook.createConversation,
   };
 
   return <ConversationContext.Provider value={value}>{children}</ConversationContext.Provider>;
