@@ -1,29 +1,186 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "tw-shimmer";
 
+/* v3 darkMode:["class"] equivalent - `dark:` matches when a `.dark`
+   ancestor (or self) is present. <html class="dark"> is hardcoded in
+   src/app/layout.tsx today, but both a light `:root` and a dark `.dark`
+   block are defined below so a future theme toggle is a one-line change,
+   not a redesign. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* v3-era hand-ported replacement (see git history on tailwind.config.ts)
+   for the assistant-ui registry's `@custom-variant data-open`/`data-closed`
+   at-rules, now expressed natively. Widened to also match Base UI's
+   `data-panel-open` attribute, which some assistant-ui Elements use. */
+@custom-variant data-open (&:where([data-state="open"], [data-panel-open], [data-open]:not([data-open="false"])));
+@custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));
+
+/* ---------------------------------------------------------------------
+   Design tokens - monochrome, ChatGPT/Claude-style surface. Every
+   channel is chroma 0 (pure grayscale) except the two semantic hues kept
+   for destructive/warning states. No cyan, no purple, no glow.
+
+   `paper`/`floating` in the assistant-ui Elements' surfaces.tsx render as
+   `bg-background dark:bg-popover` - so in dark mode PANELS use --popover
+   and the PAGE uses --background, which is why --popover sits one step
+   above true black rather than equal to it.
+   --------------------------------------------------------------------- */
 :root {
-  --bg-app: #060911;
-  --bg-surface-1: #0A0F1D;
-  --bg-surface-2: #111827;
-  --bg-surface-3: #1F2937;
-  
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(0, 240, 255, 0.25);
-  
-  --accent-cyan: #00F0FF;
-  --accent-purple: #7C3AED;
-  
-  --text-primary: #F3F4F6;
-  --text-secondary: #9CA3AF;
-  --text-muted: #6B7280;
+  color-scheme: light;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.145 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.145 0 0);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: oklch(0.145 0 0);
+  --destructive: oklch(0.55 0.16 25);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.9 0 0);
+  --ring: oklch(0.6 0 0);
+  --radius: 0.75rem;
+
+  /* Project-native palette, referenced directly across ~29 page/layout
+     files as raw CSS vars and Tailwind utilities (bg-bg-app, text-accent-
+     cyan, etc). Retargeted onto the semantic tokens above instead of
+     literal hex, so every one of those files goes monochrome with zero
+     component edits. Phase 10 retires this indirection and renames the
+     call sites directly. */
+  --bg-app: var(--background);
+  --bg-surface-1: var(--popover);
+  --bg-surface-2: var(--muted);
+  --bg-surface-3: var(--accent);
+  --border-subtle: var(--border);
+  --border-glow: var(--border);
+  --accent-cyan: var(--foreground);
+  --accent-purple: var(--muted-foreground);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: var(--muted-foreground);
+}
+
+.dark {
   color-scheme: dark;
+
+  --background: oklch(0 0 0);
+  --foreground: oklch(0.965 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.965 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.965 0 0);
+  --primary: oklch(0.965 0 0);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.185 0 0);
+  --secondary-foreground: oklch(0.965 0 0);
+  --muted: oklch(0.185 0 0);
+  --muted-foreground: oklch(0.66 0 0);
+  --accent: oklch(0.21 0 0);
+  --accent-foreground: oklch(0.965 0 0);
+  --destructive: oklch(0.62 0.14 25);
+  --destructive-foreground: oklch(0.965 0 0);
+  --border: oklch(0.24 0 0);
+  --input: oklch(0.24 0 0);
+  --ring: oklch(0.55 0 0);
+  --radius: 0.75rem;
+
+  --bg-app: var(--background);
+  --bg-surface-1: var(--popover);
+  --bg-surface-2: var(--muted);
+  --bg-surface-3: var(--accent);
+  --border-subtle: var(--border);
+  --border-glow: var(--border);
+  --accent-cyan: var(--foreground);
+  --accent-purple: var(--muted-foreground);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: var(--muted-foreground);
+}
+
+@theme inline {
+  /* shadcn/assistant-ui semantic tokens -> the :root/.dark values above.
+     `inline` keeps these referencing the runtime custom property, which
+     is what lets the `.dark` override block actually take effect. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* Project-native palette utilities - exact v3 class names preserved
+     (bg-bg-app, bg-bg-surface-1/2/3, text-bg-app, bg/text/border-accent-cyan,
+     bg/text/border-accent-purple, border-border-subtle, border-border-glow,
+     bg/text/border-status-*, shadow-glow, shadow-purpleGlow). Deliberately
+     not adding shorter aliases (e.g. `--color-app`, `--color-surface-1`,
+     `--color-glow`) that some page files reference as bare classes like
+     `bg-app`/`border-glow` - those were already-undefined no-op utilities
+     before this migration and stay that way; Phase 10 is the real cleanup. */
+  --color-bg-app: var(--bg-app);
+  --color-bg-surface-1: var(--bg-surface-1);
+  --color-bg-surface-2: var(--bg-surface-2);
+  --color-bg-surface-3: var(--bg-surface-3);
+  --color-accent-cyan: var(--accent-cyan);
+  --color-accent-purple: var(--accent-purple);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-glow: var(--border-glow);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  /* Exactly two hues survive in the whole app: destructive/danger red and
+     warning amber. success/working/waiting carry meaning through weight
+     and opacity instead of color, the way ChatGPT/Claude do it. */
+  --color-status-success: var(--foreground);
+  --color-status-warning: oklch(0.72 0.12 75);
+  --color-status-danger: var(--destructive);
+  --color-status-working: var(--muted-foreground);
+  --color-status-waiting: var(--muted-foreground);
+
+  --shadow-glow: none;
+  --shadow-purpleGlow: none;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
+
+  /* camelCase key preserved on purpose - the v3 config used
+     `animation.pulseSlow`/`spinSlow`, which produced `animate-pulseSlow`/
+     `animate-spinSlow` utilities (Tailwind does not kebab-case custom
+     animation keys), and that exact class name is what component code uses. */
+  --animate-pulseSlow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-spinSlow: spin 12s linear infinite;
 }
 
 body {
   background-color: var(--bg-app);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: var(--font-sans);
   overflow-x: hidden;
 }
 
@@ -34,36 +191,38 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #060911;
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1F2937;
+  background: var(--border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00F0FF;
+  background: var(--muted-foreground);
 }
 
-/* Focus styles */
+/* Focus styles - neutral ring, not cyan */
 *:focus-visible {
-  outline: 2px solid #00F0FF;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
-/* Custom Glassmorphism */
+/* Flat panel surface - no glassmorphism, no backdrop-filter, no glow */
 .glass-panel {
-  background: rgba(10, 15, 29, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--popover);
+  border: 1px solid var(--border);
 }
 
 .glass-panel-interactive {
-  background: rgba(10, 15, 29, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease;
+}
+
+.glass-panel-interactive:hover {
+  border-color: var(--ring);
 }
 
 @layer utilities {
@@ -76,8 +235,51 @@ body {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
 
-.glass-panel-interactive:hover {
-  border-color: rgba(0, 240, 255, 0.4);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
-  transform: translateY(-1px);
+/* Base UI -> Radix collapsible bridge. The assistant-ui Elements'
+   `collapsePanel` recipe (src/components/elements/surfaces.tsx) was
+   authored against Base UI's Collapsible, which exposes
+   `--collapsible-panel-height` and `data-starting-style`/`data-ending-
+   style`. This repo's collapsible primitive (src/components/ui/
+   collapsible.tsx) is Radix, which instead exposes
+   `--radix-collapsible-content-height` and `data-state="open"|"closed"`
+   - so `data-[starting-style]:h-0`/`data-[ending-style]:h-0` never match
+   and `h-(--collapsible-panel-height)` would resolve to nothing without
+   this bridge. Scoped via an attribute-contains selector on the
+   Tailwind arbitrary-property class itself (present verbatim in the
+   rendered `class` attribute) rather than a bare `[data-state]`, so this
+   doesn't also apply to unrelated Radix Dialog/Tooltip/etc instances
+   elsewhere in the app that share the same attribute. Drives the actual
+   open/close transition off `data-state` per Radix's own documented
+   animation pattern, using the collapsible-down/up keyframes below. */
+[class*="collapsible-panel-height"][data-state] {
+  --collapsible-panel-height: var(--radix-collapsible-content-height);
+}
+[class*="collapsible-panel-height"][data-state="open"] {
+  animation: collapsible-down 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+[class*="collapsible-panel-height"][data-state="closed"] {
+  animation: collapsible-up 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="collapsible-panel-height"][data-state="open"],
+  [class*="collapsible-panel-height"][data-state="closed"] {
+    animation: none;
+  }
+}
+
+@keyframes collapsible-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
+  }
+}
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
+  }
+  to {
+    height: 0;
+  }
 }

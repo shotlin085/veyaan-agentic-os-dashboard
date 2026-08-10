@@ -15,12 +15,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sign in with a workspace bearer token before sending messages." }, { status: 401 });
   }
 
+  // Forward the browser's own abort signal (Stop button / navigation away)
+  // in addition to the timeout - without this, clicking Stop only tears
+  // down the client-side fetch while Hermes keeps generating (and billing)
+  // server-side, since the upstream request is never actually cancelled.
   const upstream = await fetch(assistantGatewayUrl(`/workspaces/${encodeURIComponent(body.workspaceId)}/conversations/${encodeURIComponent(body.conversationId)}/messages`), {
     method: "POST",
     headers: { authorization, "content-type": "application/json", accept: "text/event-stream" },
     body: JSON.stringify({ content: body.content }),
     cache: "no-store",
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.any([request.signal, AbortSignal.timeout(120_000)]),
   }).catch(() => null);
 
   if (!upstream) return NextResponse.json({ error: "Hermes Orchestrator is not reachable." }, { status: 503 });
