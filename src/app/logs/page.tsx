@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Terminal } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { LockKeyhole, RefreshCwIcon, TerminalIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
+import { Timeline, type TimelineEvent } from "@/components/elements/timeline";
+import { ghostButton, mono } from "@/components/elements/surfaces";
+import { cn } from "@/lib/utils";
 
 type TelemetryEvent = {
   event_id: string;
@@ -51,16 +50,57 @@ export default function LogsObservabilityPage() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  return <div className="mx-auto max-w-6xl space-y-6 pb-12">
-    <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border-subtle pb-5">
-      <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-status-success/20 bg-status-success/10 text-status-success"><Terminal className="h-5 w-5" /></div><div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-status-success">VEYAAN / OBSERVABILITY</p><h1 className="mt-1 text-2xl font-semibold text-white">Logs &amp; Observability</h1></div></div>
-      {workspace && <Button variant="secondary" size="sm" onClick={() => void refresh()} disabled={loading}><RefreshCw className={loading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />Refresh</Button>}
-    </header>
-    <p className="max-w-2xl text-sm leading-6 text-text-muted">Real audit events, correlation traces, and service telemetry for the selected workspace.</p>
-    {!workspace ? <Card><EmptyState title="Connect a workspace" description="Sign in with Supabase and select an active workspace to inspect telemetry events." locked /></Card>
-      : error ? <Card><EmptyState title="Telemetry data is unavailable" description={error} /></Card>
-      : loading ? <Card className="h-36 animate-pulse" />
-      : events.length === 0 ? <Card><EmptyState title="No telemetry events recorded" description="Real service activity will appear here once events are emitted for this workspace." /></Card>
-      : <div className="grid gap-4 md:grid-cols-2">{events.map((event) => <Card key={event.event_id}><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>{event.event_type}</CardTitle><p className="mt-1 text-xs text-text-muted">{new Date(event.occurred_at).toLocaleString()}</p></div>{event.correlation_id && <Badge tone="warning">{event.correlation_id}</Badge>}</div></CardHeader><CardContent><div className="text-xs text-text-muted">{event.project_id ? `Project ${event.project_id}` : "No project"}</div></CardContent></Card>)}</div>}
-  </div>;
+  const timelineEvents: TimelineEvent[] = events.map((event) => ({
+    id: event.event_id,
+    when: "past",
+    time: new Date(event.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    title: event.event_type,
+    detail: event.correlation_id
+      ? `correlation ${event.correlation_id}`
+      : event.project_id
+        ? `project ${event.project_id}`
+        : undefined,
+  }));
+
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6 pb-16">
+      <header className="flex items-center justify-between gap-4 border-b border-border pb-5">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-foreground/[0.06] text-foreground/70">
+            <TerminalIcon className="size-4" />
+          </div>
+          <div>
+            <p className={cn(mono, "text-foreground/35")}>VEYAAN / OBSERVABILITY</p>
+            <h1 className="text-xl font-semibold text-foreground">Logs</h1>
+          </div>
+        </div>
+        {workspace && (
+          <button type="button" onClick={() => void refresh()} disabled={loading} className={cn(ghostButton, "size-8 disabled:opacity-40")} aria-label="Refresh">
+            <RefreshCwIcon className={cn("size-3.5", loading && "animate-spin")} />
+          </button>
+        )}
+      </header>
+
+      <p className="max-w-2xl text-sm leading-6 text-foreground/55">
+        Real audit events, correlation traces, and service telemetry for the selected workspace.
+      </p>
+
+      {!workspace ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
+          <LockKeyhole className="size-6 text-foreground/30" />
+          <p className="text-sm text-foreground/55">
+            Sign in and select an active workspace from the sidebar to inspect telemetry events.
+          </p>
+        </div>
+      ) : error ? (
+        <p className="text-[13px] leading-snug text-destructive/80">{error}</p>
+      ) : loading && events.length === 0 ? (
+        <p className={cn(mono, "text-foreground/35")}>Loading telemetry...</p>
+      ) : events.length === 0 ? (
+        <p className={cn(mono, "text-foreground/35")}>No telemetry events recorded for this workspace yet.</p>
+      ) : (
+        <Timeline events={timelineEvents} visibleCount={timelineEvents.length} className="w-full max-w-none" />
+      )}
+    </div>
+  );
 }

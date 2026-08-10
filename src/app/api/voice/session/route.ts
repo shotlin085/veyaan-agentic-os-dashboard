@@ -3,6 +3,17 @@ import { assistantGatewayUrl, bearerAuthorization } from "@/lib/server/assistant
 
 export const dynamic = "force-dynamic";
 
+const VOICE_TOKEN_URL = process.env.VOICE_TOKEN_URL ?? "https://voice.agnixstudio.com/token";
+
+// This used to POST the orchestrator's own /voice/sessions, whose
+// LIVEKIT_PUBLIC_URL points at the us-east-1 backend box - the wrong
+// region. The real LiveKit deployment (and its token-minting service)
+// lives on the dedicated Mumbai voice server (see CLAUDE.md), reachable
+// publicly only at voice.agnixstudio.com/token. That service verifies
+// the Supabase bearer token itself (JWKS, same approach as the backend,
+// no shared secret) - the workspace check below is a dashboard-side
+// gate (don't offer voice to someone with no real workspace access),
+// not something the token server itself requires.
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const authorization = bearerAuthorization(request);
@@ -20,20 +31,21 @@ export async function POST(request: Request) {
       const detail = await workspaceResponse.text().catch(() => "Workspace access was denied.");
       return NextResponse.json({ detail: detail || "Workspace access was denied." }, { status: workspaceResponse.status === 404 ? 404 : 403 });
     }
-    const response = await fetch(assistantGatewayUrl("/voice/sessions"), {
+    const response = await fetch(VOICE_TOKEN_URL, {
       method: "POST",
       headers: { "content-type": "application/json", authorization },
-      body: JSON.stringify({ workspace_id: workspaceId }),
+      body: JSON.stringify({}),
       cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
     });
 
     const payload = await response.json().catch(() => ({
-      detail: "Hermes returned an invalid voice-session response.",
+      detail: "The voice server returned an invalid response.",
     }));
     return NextResponse.json(payload, { status: response.status });
   } catch {
     return NextResponse.json(
-      { detail: "Hermes voice gateway is unreachable. Start the orchestrator first." },
+      { detail: "The voice server is unreachable." },
       { status: 503 },
     );
   }
