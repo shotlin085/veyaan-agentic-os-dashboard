@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { HermesModel } from "./hermes-models";
+import type { CustomProvider } from "./hermes-providers";
 import type { HermesRoute, HermesUsage } from "./hermes-adapter";
 
 interface UseUsdToInrResult {
@@ -78,12 +79,18 @@ function parseUsdPrice(price: string | null): number | null {
  *    not a catalog id) - no verified per-token price exists for that
  *    literal identifier, so cost is reported unavailable rather than
  *    guessed.
+ *  - "custom": a bring-your-own-key provider (app/providers/) - real
+ *    provider name and model shown, but no provider API exposes its own
+ *    pricing, so cost is honestly unavailable here too (real input/
+ *    output token counts are still shown - see ResponseMeta's "in"/"out"
+ *    stats, which come from `usage` directly, not from this function).
  */
 export function computeTurnCost(
   route: HermesRoute | undefined,
   usage: HermesUsage | undefined,
   models: readonly HermesModel[],
   usdToInr: number | null,
+  customProviders: readonly CustomProvider[] = [],
 ): TurnCost {
   if (!route?.path) {
     return { provider: "—", modelLabel: "—", usdCost: null, inrCost: null, unavailableReason: "No route information yet." };
@@ -100,6 +107,17 @@ export function computeTurnCost(
       usdCost: null,
       inrCost: null,
       unavailableReason: "No published per-token price for the research agent's fixed model.",
+    };
+  }
+
+  if (route.path === "custom") {
+    const provider = customProviders.find((p) => p.id === route.providerId);
+    return {
+      provider: provider?.name ?? "Custom provider",
+      modelLabel: route.model ?? "—",
+      usdCost: null,
+      inrCost: null,
+      unavailableReason: "This provider's API doesn't publish per-token pricing.",
     };
   }
 

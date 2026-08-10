@@ -27,8 +27,14 @@ export interface HermesHistoryConfig {
  * session-based model-lock path), not a guess. */
 function hermesTurnCustom(turn: HermesTurn): { usage?: HermesUsage; route?: HermesRoute } {
   if (!turn.model_used) return {};
-  const route: HermesRoute =
-    turn.model_used === "openrouter/free"
+  // "custom:{provider_id}:{model}" - streaming_routes.py's
+  // _run_custom_provider_path's own model_used encoding for a bring-
+  // your-own-key turn (app/providers/); model itself may contain ":",
+  // so split into at most 3 parts rather than assuming none does.
+  const customMatch = /^custom:([^:]+):(.+)$/.exec(turn.model_used);
+  const route: HermesRoute = customMatch
+    ? { path: "custom", providerId: customMatch[1], model: customMatch[2] }
+    : turn.model_used === "openrouter/free"
       ? { path: "fast", model: turn.model_used }
       : turn.model_used === "hermes-agent"
         ? { path: "escalated", model: turn.model_used }

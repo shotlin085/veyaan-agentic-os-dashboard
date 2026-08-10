@@ -57,6 +57,7 @@ import {
 } from "@/components/elements/composer";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
+import { useProviders } from "@/components/assistant/runtime/hermes-providers";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
 import type { HermesRoute, HermesUsage } from "@/components/assistant/runtime/hermes-adapter";
@@ -312,6 +313,7 @@ const EditComposer: FC = () => {
  */
 const ResponseMeta: FC = () => {
   const { models } = useHermesModels();
+  const { providers } = useProviders();
   const { rate: usdToInr } = useUsdToInr();
   const timing = useMessageTiming();
   const streaming = useAuiState((s) => s.message.status?.type === "running");
@@ -322,7 +324,7 @@ const ResponseMeta: FC = () => {
   );
 
   if (!custom?.route) return null;
-  const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr);
+  const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr, providers);
   const costValue = cost.usdCost === 0 ? "Free" : cost.inrCost !== null ? formatInr(cost.inrCost) : "—";
 
   const stats = [
@@ -574,8 +576,12 @@ const Composer: FC = () => {
 const ModelPickerButton: FC = () => {
   const aui = useAui();
   const { models, loading } = useHermesModels();
+  const { providers } = useProviders();
   const selectedId = useAuiState((s) => (s.composer.runConfig.custom?.model as string | undefined) ?? "");
-  const selectedModel = models.find((m) => m.id === selectedId);
+  const selectedProviderId = useAuiState((s) => (s.composer.runConfig.custom?.providerId as string | undefined) ?? "");
+  const selectedModel = selectedProviderId
+    ? { name: selectedId, provider: providers.find((p) => p.id === selectedProviderId)?.name ?? "" }
+    : models.find((m) => m.id === selectedId);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -618,7 +624,7 @@ const ModelPickerButton: FC = () => {
         {models.map((model) => (
           <ComposerMenuItem
             key={model.id}
-            active={model.id === selectedId}
+            active={model.id === selectedId && !selectedProviderId}
             onClick={() => {
               aui.composer.setRunConfig({ custom: { model: model.id } });
               setOpen(false);
@@ -629,9 +635,27 @@ const ModelPickerButton: FC = () => {
             <span className={cn(mono, "text-foreground/35 tabular-nums")}>
               {model.free ? "free" : model.inputPrice ?? ""}
             </span>
-            {model.id === selectedId && <CheckIcon className="size-3.5 shrink-0" />}
+            {model.id === selectedId && !selectedProviderId && <CheckIcon className="size-3.5 shrink-0" />}
           </ComposerMenuItem>
         ))}
+        {providers.map((provider) =>
+          provider.models.map((modelId) => (
+            <ComposerMenuItem
+              key={`${provider.id}:${modelId}`}
+              active={modelId === selectedId && provider.id === selectedProviderId}
+              onClick={() => {
+                aui.composer.setRunConfig({ custom: { model: modelId, providerId: provider.id } });
+                setOpen(false);
+              }}
+            >
+              <span className="flex-1 truncate text-start">{modelId}</span>
+              <span className={cn(mono, "text-foreground/35 truncate")}>{provider.name}</span>
+              {modelId === selectedId && provider.id === selectedProviderId && (
+                <CheckIcon className="size-3.5 shrink-0" />
+              )}
+            </ComposerMenuItem>
+          )),
+        )}
       </ComposerMenu>
     </div>
   );
@@ -653,6 +677,7 @@ const ModelPickerButton: FC = () => {
 const SessionCostButton: FC = () => {
   const messages = useAuiState((s) => s.thread.messages);
   const { models } = useHermesModels();
+  const { providers } = useProviders();
   const { rate: usdToInr } = useUsdToInr();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -686,7 +711,7 @@ const SessionCostButton: FC = () => {
     if (message.role !== "assistant") continue;
     const custom = message.metadata.custom as { usage?: HermesUsage; route?: HermesRoute } | undefined;
     if (!custom?.route) continue;
-    const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr);
+    const cost = computeTurnCost(custom.route, custom.usage, models, usdToInr, providers);
     if (cost.usdCost === null) continue;
     sessionUsd += cost.usdCost;
     lastTurnUsd = cost.usdCost;

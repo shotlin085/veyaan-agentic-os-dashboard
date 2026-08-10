@@ -11,7 +11,7 @@ type HermesStreamEvent =
   | { event: "assistant.message.completed"; content?: string; finish_reason?: string | null }
   | { event: "runtime.failed"; error?: string }
   | { event: "assistant.usage"; prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-  | { event: "assistant.route"; path?: "fast" | "escalated" | "model"; model?: string }
+  | { event: "assistant.route"; path?: "fast" | "escalated" | "model" | "custom"; model?: string; provider_id?: string }
   | {
       event: "assistant.tool.progress";
       tool?: string;
@@ -42,8 +42,9 @@ export interface HermesUsage {
 }
 
 export interface HermesRoute {
-  path?: "fast" | "escalated" | "model";
+  path?: "fast" | "escalated" | "model" | "custom";
   model?: string;
+  providerId?: string;
 }
 
 function lastUserMessageText(messages: readonly ThreadMessage[]): string {
@@ -72,6 +73,10 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       // escalate routing; a real model id bypasses it for a session
       // locked to that model (SendMessageRequest.model on the backend).
       const model = typeof runConfig.custom?.model === "string" ? runConfig.custom.model : undefined;
+      // Set alongside `model` only when the picker's chosen entry came
+      // from a bring-your-own-key provider (ModelPickerButton) - routes
+      // through that provider's own API server-side instead of Hermes.
+      const providerId = typeof runConfig.custom?.providerId === "string" ? runConfig.custom.providerId : undefined;
 
       if (!config.workspaceId || !config.conversationId || !config.token) {
         yield {
@@ -84,7 +89,13 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${config.token}` },
-        body: JSON.stringify({ workspaceId: config.workspaceId, conversationId: config.conversationId, content, model }),
+        body: JSON.stringify({
+          workspaceId: config.workspaceId,
+          conversationId: config.conversationId,
+          content,
+          model,
+          providerId,
+        }),
         signal: abortSignal,
       }).catch(() => null);
 
@@ -190,7 +201,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
                 };
                 break;
               case "assistant.route":
-                route = { path: parsed.path, model: parsed.model };
+                route = { path: parsed.path, model: parsed.model, providerId: parsed.provider_id };
                 break;
               case "assistant.tool.progress": {
                 // Hermes only sends `label`/`emoji` on the "running" event -
