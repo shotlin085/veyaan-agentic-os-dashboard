@@ -27,11 +27,14 @@ import {
   EllipsisIcon,
   ImageIcon,
   ListChecksIcon,
+  Loader2Icon,
   PencilIcon,
   RefreshCwIcon,
   SettingsIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
+  WrenchIcon,
+  XIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -53,6 +56,7 @@ import { CostMeter } from "@/components/elements/cost-meter";
 import { AgentPlan } from "@/components/elements/agent-plan";
 import { TodoList } from "@/components/elements/todo-list";
 import { ReasoningEffort } from "@/components/elements/reasoning-effort";
+import { ImageGeneration } from "@/components/elements/image-generation";
 import {
   ComposerActions,
   ComposerAttachButton,
@@ -72,7 +76,7 @@ import {
 } from "@/components/elements/composer";
 import { field, floating, ghostButton, iconSwap, iconSwapIn, inkButton, mono, paper } from "@/components/elements/surfaces";
 import { useHermesModels } from "@/components/assistant/runtime/hermes-models";
-import { useHermesToolsets } from "@/components/assistant/runtime/hermes-toolsets";
+import { useHermesToolsets, type HermesToolset } from "@/components/assistant/runtime/hermes-toolsets";
 import { useReasoningModels } from "@/components/assistant/runtime/hermes-reasoning-models";
 import { useProviders } from "@/components/assistant/runtime/hermes-providers";
 import { useActiveAgent } from "@/components/assistant/runtime/ActiveAgentContext";
@@ -81,8 +85,12 @@ import { useWorkspaceCollection } from "@/lib/workspace/useWorkspaceCollection";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
 import { useContextUsage } from "@/components/assistant/runtime/context-usage";
-import { ImageGenPanel } from "@/components/elements/image-gen-panel";
-import type { ImageEngine } from "@/components/assistant/runtime/image-generation";
+import {
+  enhanceImagePrompt,
+  generateImage,
+  useImageJobPolling,
+  type ImageEngine,
+} from "@/components/assistant/runtime/image-generation";
 import { SLASH_COMMANDS, type SlashCommand } from "@/components/assistant/bindings/slash-commands";
 import type { HermesPlan, HermesRoute, HermesUsage } from "@/components/assistant/runtime/hermes-adapter";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -648,15 +656,96 @@ const MessageBranchPicker: FC = () => {
  * composer - one agent per conversation, no parallel/collaborative
  * execution, matching the scope actually built here.
  */
+const IMAGE_ENGINE_LABEL: Record<ImageEngine, string> = {
+  flow: "Nano Banana",
+  chatgpt: "ChatGPT",
+};
+
 const Composer: FC = () => {
   const aui = useAui();
   const value = useAuiState((s) => s.composer.text);
   const matches = useSlashMatches(value, SLASH_COMMANDS) as SlashCommand[];
   const { records: agentRecords } = useWorkspaceCollection("agent-definitions");
-  const { createConversation } = useConversations();
+  const { createConversation, activeConversation, bumpMessageReload } = useConversations();
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [switchingAgent, setSwitchingAgent] = useState(false);
   const runConfigCustom = useAuiState((s) => s.composer.runConfig.custom);
+
+  // Inline, ChatGPT-style image quick-action - a pill attached to the
+  // composer, not a separate modal. "idea" -> Enter/Send calls
+  // enhance-prompt and replaces the composer text with the result
+  // ("review", per the confirmed product decision to show it before
+  // spending real generation credits) -> Enter/Send again actually
+  // generates. Real backend calls throughout (see
+  // components/assistant/runtime/image-generation.ts) - no client-side
+  // simulation of any step.
+  const { session } = useAuth();
+  const { workspace } = useWorkspace();
+  const imageConfig = {
+    workspaceId: workspace?.id ?? "",
+    conversationId: activeConversation?.id ?? "",
+    token: session?.access_token ?? "",
+  };
+  const [imageEngine, setImageEngine] = useState<ImageEngine | null>(null);
+  const [imageStage, setImageStage] = useState<"idea" | "enhancing" | "review" | "generating">("idea");
+  const [imageJobId, setImageJobId] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const imageJobState = useImageJobPolling(imageConfig, imageStage === "generating" ? imageJobId : null);
+
+  useEffect(() => {
+    if (!imageJobState || imageStage !== "generating") return;
+    if (imageJobState.status === "completed") {
+      bumpMessageReload();
+      setImageEngine(null);
+      setImageStage("idea");
+      setImageJobId(null);
+      setImageError(null);
+      aui.composer.setText("");
+    } else if (imageJobState.status === "failed") {
+      setImageError(imageJobState.error ?? "Generation failed.");
+      setImageStage("review");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageJobState, imageStage]);
+
+  const cancelImageMode = () => {
+    setImageEngine(null);
+    setImageStage("idea");
+    setImageJobId(null);
+    setImageError(null);
+  };
+
+  const handleImageStep = async () => {
+    if (!imageEngine) return;
+    const text = value.trim();
+    if (!text) return;
+
+    if (imageStage === "idea") {
+      setImageStage("enhancing");
+      setImageError(null);
+      const result = await enhanceImagePrompt(imageConfig, text);
+      if ("error" in result) {
+        setImageError(result.error);
+        setImageStage("idea");
+        return;
+      }
+      aui.composer.setText(result.enhancedPrompt);
+      setImageStage("review");
+      return;
+    }
+
+    if (imageStage === "review") {
+      setImageStage("generating");
+      setImageError(null);
+      const result = await generateImage(imageConfig, text, imageEngine);
+      if ("error" in result) {
+        setImageError(result.error);
+        setImageStage("review");
+        return;
+      }
+      setImageJobId(result.jobId);
+    }
+  };
 
   const agentPeople: ComposerPerson[] = useMemo(
     () =>
@@ -733,13 +822,61 @@ const Composer: FC = () => {
         ))}
       </ComposerMenu>
       <ComposerBar>
+        {imageEngine && imageStage === "generating" && (
+          <div className="px-3 pt-2.5">
+            {/* Real assistant-ui Elements component (installed via
+              `npx shadcn add @assistant-ui/elements-image-generation`,
+              already vendored unused in this repo before this feature -
+              see its own file's comment). It's a stylized loading
+              placeholder only - no real-image prop exists - so it's
+              shown only for this transient stage; the actual generated
+              photo arrives afterward as a real persisted message (see
+              bumpMessageReload above), rendered by MarkdownText's own
+              img override, not by this component. */}
+            <ImageGeneration prompt={value} generating />
+          </div>
+        )}
+        {imageEngine && imageStage !== "generating" && (
+          <div className="flex flex-wrap items-center gap-2 px-3 pt-2.5">
+            <span className="flex items-center gap-1.5 rounded-full bg-foreground/[0.08] py-1 pe-1 ps-2.5 text-[12px] font-medium text-foreground">
+              <ImageIcon className="size-3 shrink-0" />
+              {imageStage === "enhancing"
+                ? "Writing a professional prompt…"
+                : imageStage === "review"
+                  ? "Review, then press send to generate"
+                  : `Create image — ${IMAGE_ENGINE_LABEL[imageEngine]}`}
+              {imageStage === "enhancing" && <Loader2Icon className="size-3 shrink-0 animate-spin" />}
+              <button
+                type="button"
+                onClick={cancelImageMode}
+                aria-label="Cancel image generation"
+                className="ms-0.5 flex size-4 items-center justify-center rounded-full text-foreground/50 hover:bg-foreground/10 hover:text-foreground"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </span>
+          </div>
+        )}
+        {imageError && <p className="px-3 pt-1.5 text-[12px] leading-snug text-status-danger">{imageError}</p>}
         <ComposerPrimitive.Input
-          placeholder="Message VEYAAN... (@ to talk to a specific agent)"
-          className="placeholder:text-foreground/35 min-h-11 max-h-48 w-full resize-none bg-transparent px-3 py-2 text-[15px] outline-none"
+          placeholder={
+            imageEngine
+              ? imageStage === "review"
+                ? "Edit the prompt, then send to generate…"
+                : `Describe the image for ${IMAGE_ENGINE_LABEL[imageEngine]}…`
+              : "Message VEYAAN... (@ to talk to a specific agent)"
+          }
+          className="placeholder:text-foreground/35 min-h-11 max-h-48 w-full resize-none bg-transparent px-3 py-2 text-[15px] outline-none disabled:opacity-60"
           rows={1}
           autoFocus
           aria-label="Message input"
+          disabled={imageStage === "enhancing" || imageStage === "generating"}
           onKeyDown={(event) => {
+            if (imageEngine && event.key === "Enter" && !event.nativeEvent.isComposing && !event.shiftKey) {
+              event.preventDefault();
+              void handleImageStep();
+              return;
+            }
             if (matchCount === 0 || event.nativeEvent.isComposing) return;
             if (event.key === "ArrowDown") {
               event.preventDefault();
@@ -759,15 +896,26 @@ const Composer: FC = () => {
           }}
         />
         <ComposerToolbar>
-          <PluginsButton />
+          <PluginsButton onSelectImageEngine={setImageEngine} />
           <ComposerActions>
-            <ModelPickerButton />
-            <PlanToggleButton />
-            <ReasoningEffortButton />
-            <SessionCostButton />
-            <ContextUsageButton />
-            <DictationButton />
-            <ComposerSendAction />
+            {imageEngine ? (
+              <ComposerSend
+                streaming={false}
+                idle={!value.trim() || imageStage === "enhancing" || imageStage === "generating"}
+                aria-label={imageStage === "review" ? "Generate image" : "Enhance prompt"}
+                onClick={() => void handleImageStep()}
+              />
+            ) : (
+              <>
+                <ModelPickerButton />
+                <PlanToggleButton />
+                <ReasoningEffortButton />
+                <SessionCostButton />
+                <ContextUsageButton />
+                <DictationButton />
+                <ComposerSendAction />
+              </>
+            )}
           </ComposerActions>
         </ComposerToolbar>
       </ComposerBar>
@@ -805,20 +953,146 @@ function toolsetStatus(toolset: { enabled: boolean; configured: boolean }): "hea
  * right now, amber means it's configured but turned off, gray/red means
  * no real credentials exist for it yet.
  */
-const IMAGE_QUICK_ACTIONS: { engine: ImageEngine; label: string }[] = [
-  { engine: "flow", label: "Create image — Nano Banana" },
-  { engine: "chatgpt", label: "Create image — ChatGPT" },
+const IMAGE_QUICK_ACTIONS: { engine: ImageEngine; label: string; icon: FC<{ className?: string }> }[] = [
+  { engine: "flow", label: "Create image — Nano Banana", icon: ImageIcon },
+  // Real OpenAI brand mark (provider-logos.tsx), same one the model
+  // picker already uses - not a generic icon, matching the ChatGPT logo
+  // the user pointed at directly.
+  { engine: "chatgpt", label: "Create image — ChatGPT", icon: () => <ProviderLogo provider="OpenAI" className="size-3.5" /> },
 ];
 
-const PluginsButton: FC = () => {
-  const { toolsets, loading, error } = useHermesToolsets();
-  const [open, setOpen] = useState(false);
+/**
+ * The full toolset browse list used to sit inline in the main "+" menu,
+ * pushing it to 28+ rows tall - which is what made the dynamic
+ * max-height math necessary in the first place (a short menu never needs
+ * it). Moved into its own submenu, opened from a single "Tools" trigger
+ * row: a real side flyout on wide viewports (hover *or* click - click
+ * always works, hover is a bonus for a mouse), and a below-anchored panel
+ * on narrow ones where a side flyout wouldn't fit at all. Pure Tailwind
+ * responsive classes drive that split (`sm:` prefix), no JS viewport
+ * check needed. Kept as its own component so PluginsButton's rewrite
+ * below states which are which stays readable.
+ */
+const ToolsSubmenu: FC<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  toolsets: HermesToolset[];
+  loading: boolean;
+  error: string | null;
+  maxHeight: number;
+  onNavigateSettings: () => void;
+}> = ({ open, onOpenChange, toolsets, loading, error, maxHeight, onNavigateSettings }) => {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [imageEngine, setImageEngine] = useState<ImageEngine | null>(null);
+  const healthyCount = toolsets.filter((t) => t.enabled).length;
+
+  return (
+    <div className="relative" onMouseEnter={() => onOpenChange(true)} onMouseLeave={() => onOpenChange(false)}>
+      <ComposerMenuItem active={open} onClick={() => onOpenChange(!open)}>
+        <WrenchIcon className="size-3.5 shrink-0 text-foreground/45" />
+        <span className="flex-1 truncate text-start">Tools</span>
+        <span className={cn(mono, "text-foreground/30 tabular-nums")}>
+          {loading ? "…" : `${healthyCount}/${toolsets.length}`}
+        </span>
+        <ChevronRightIcon className="size-3 shrink-0 text-foreground/30" />
+      </ComposerMenuItem>
+
+      {open && (
+        <div
+          className={cn(
+            floating,
+            "absolute z-20 flex w-80 flex-col gap-0.5 overflow-y-auto rounded-2xl p-1.5",
+            "start-0 top-full mt-1",
+            "sm:start-full sm:top-0 sm:mt-0 sm:ms-1.5",
+          )}
+          style={{ maxHeight: `${maxHeight}px` }}
+        >
+          <div className="flex items-center justify-between px-2.5 pb-1.5 pt-1">
+            <span className={cn(mono, "text-foreground/35")}>Tools</span>
+            <span className={cn(mono, "text-foreground/35 tabular-nums")}>
+              {loading ? "loading..." : `${healthyCount}/${toolsets.length} connected`}
+            </span>
+          </div>
+          {error && <p className="px-2.5 py-2 text-[12.5px] leading-snug text-destructive/80">{error}</p>}
+          {!error && !loading && toolsets.length === 0 && (
+            <p className={cn(mono, "text-foreground/35 px-2.5 py-2")}>No toolsets available yet.</p>
+          )}
+          {toolsets.map((toolset) => {
+            const status = toolsetStatus(toolset);
+            const isExpanded = expanded === toolset.name;
+            return (
+              <div key={toolset.name} className="flex flex-col">
+                <ComposerMenuItem active={isExpanded} onClick={() => setExpanded(isExpanded ? null : toolset.name)}>
+                  <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", TOOLSET_STATUS_DOT[status])} />
+                  <span className="flex-1 truncate text-start">{toolset.label}</span>
+                  <span className={cn(mono, "text-foreground/30 tabular-nums")}>{toolset.tools.length}</span>
+                  <ChevronDownIcon
+                    className={cn("size-3 shrink-0 text-foreground/30 transition-transform", isExpanded && "rotate-180")}
+                  />
+                </ComposerMenuItem>
+                {isExpanded && (
+                  <div className="mb-1 flex flex-col gap-1.5 rounded-xl bg-foreground/[0.03] px-3 py-2.5 text-[12px]">
+                    <p className="text-foreground/55">{toolset.description}</p>
+                    <p className={cn(mono, "text-foreground/35")}>{TOOLSET_STATUS_LABEL[status]}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {toolset.tools.map((tool) => (
+                        <span key={tool} className={cn(mono, "text-foreground/45 rounded bg-foreground/[0.06] px-1.5 py-0.5")}>
+                          {tool}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <Link
+            href="/settings"
+            onClick={onNavigateSettings}
+            className="mt-1 flex items-center gap-2 rounded-[10px] border-t border-border px-2.5 pt-2.5 pb-1 text-[12.5px] text-foreground/45 transition-colors hover:text-foreground/80"
+          >
+            <SettingsIcon className="size-3.5" />
+            Manage in Settings
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const PluginsButton: FC<{ onSelectImageEngine: (engine: ImageEngine) => void }> = ({ onSelectImageEngine }) => {
+  const toolsetsResult = useHermesToolsets();
+  const [open, setOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // This menu grows *upward* from the trigger (`bottom-full`) with no
+  // dynamic positioning library behind it - a fixed CSS max-height alone
+  // can silently render the menu's own top above y=0, unreachable by
+  // scroll or click, whenever the trigger doesn't happen to have that
+  // much real room above it (confirmed live: a click on an off-screen
+  // item landed at y=-79 and was silently swallowed). Measuring the
+  // trigger's actual position on open and capping height to what's
+  // really available is what a popper/floating-ui library would do
+  // automatically; this is the minimal version without that dependency.
+  // Now shared with ToolsSubmenu below too, since it opens from the same
+  // anchor and faces the identical constraint.
+  const [menuMaxHeight, setMenuMaxHeight] = useState<number>(448);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setToolsOpen(false);
+      return;
+    }
+    if (rootRef.current) {
+      // The real clipping boundary is <main>'s own overflow-y-auto edge,
+      // not the viewport edge - on mobile that's below AppShell's own
+      // top bar (hamburger + logo), so viewport-relative math alone
+      // under-reserves by exactly that bar's height and the top of this
+      // menu gets silently clipped there instead.
+      const container = rootRef.current.closest("main");
+      const containerTop = container ? container.getBoundingClientRect().top : 0;
+      const top = rootRef.current.getBoundingClientRect().top;
+      setMenuMaxHeight(Math.max(160, Math.min(448, top - containerTop - 8)));
+    }
     const onPointerDown = (event: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
     };
@@ -833,79 +1107,43 @@ const PluginsButton: FC = () => {
     };
   }, [open]);
 
-  const healthyCount = toolsets.filter((t) => t.enabled).length;
-
   return (
-    <>
-      <div ref={rootRef} className="relative">
-        <ComposerAttachButton onClick={() => setOpen((v) => !v)} title="Plugins & tools" aria-label="Plugins & tools" />
-        <ComposerMenu open={open} align="start" className="max-h-[28rem] w-80 overflow-y-auto">
-          <div className="flex flex-col gap-0.5 pb-1.5">
-            {IMAGE_QUICK_ACTIONS.map((action) => (
+    <div ref={rootRef} className="relative">
+      <ComposerAttachButton onClick={() => setOpen((v) => !v)} title="Plugins & tools" aria-label="Plugins & tools" />
+      <ComposerMenu open={open} align="start" className="w-72 overflow-visible">
+        <div className="flex flex-col gap-0.5 pb-1.5">
+          {IMAGE_QUICK_ACTIONS.map((action) => {
+            const Icon = action.icon;
+            return (
               <ComposerMenuItem
                 key={action.engine}
                 onClick={() => {
-                  setImageEngine(action.engine);
+                  onSelectImageEngine(action.engine);
                   setOpen(false);
                 }}
               >
-                <ImageIcon className="size-3.5 shrink-0 text-foreground/45" />
+                <Icon className="size-3.5 shrink-0 text-foreground/45" />
                 <span className="flex-1 truncate text-start">{action.label}</span>
               </ComposerMenuItem>
-            ))}
-          </div>
-          <div className="border-t border-border" />
-        <div className="flex items-center justify-between px-2.5 pb-1.5 pt-2">
-          <span className={cn(mono, "text-foreground/35")}>More tools</span>
-          <span className={cn(mono, "text-foreground/35 tabular-nums")}>
-            {loading ? "loading..." : `${healthyCount}/${toolsets.length} connected`}
-          </span>
+            );
+          })}
         </div>
-        {error && <p className="px-2.5 py-2 text-[12.5px] leading-snug text-destructive/80">{error}</p>}
-        {!error && !loading && toolsets.length === 0 && (
-          <p className={cn(mono, "text-foreground/35 px-2.5 py-2")}>No toolsets available yet.</p>
-        )}
-        {toolsets.map((toolset) => {
-          const status = toolsetStatus(toolset);
-          const isExpanded = expanded === toolset.name;
-          return (
-            <div key={toolset.name} className="flex flex-col">
-              <ComposerMenuItem active={isExpanded} onClick={() => setExpanded(isExpanded ? null : toolset.name)}>
-                <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", TOOLSET_STATUS_DOT[status])} />
-                <span className="flex-1 truncate text-start">{toolset.label}</span>
-                <span className={cn(mono, "text-foreground/30 tabular-nums")}>{toolset.tools.length}</span>
-                <ChevronDownIcon
-                  className={cn("size-3 shrink-0 text-foreground/30 transition-transform", isExpanded && "rotate-180")}
-                />
-              </ComposerMenuItem>
-              {isExpanded && (
-                <div className="mb-1 flex flex-col gap-1.5 rounded-xl bg-foreground/[0.03] px-3 py-2.5 text-[12px]">
-                  <p className="text-foreground/55">{toolset.description}</p>
-                  <p className={cn(mono, "text-foreground/35")}>{TOOLSET_STATUS_LABEL[status]}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {toolset.tools.map((tool) => (
-                      <span key={tool} className={cn(mono, "text-foreground/45 rounded bg-foreground/[0.06] px-1.5 py-0.5")}>
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-        <Link
-          href="/settings"
-          onClick={() => setOpen(false)}
-          className="mt-1 flex items-center gap-2 rounded-[10px] border-t border-border px-2.5 pt-2.5 pb-1 text-[12.5px] text-foreground/45 transition-colors hover:text-foreground/80"
-        >
-          <SettingsIcon className="size-3.5" />
-          Manage in Settings
-          </Link>
-        </ComposerMenu>
-      </div>
-      {imageEngine && <ImageGenPanel engine={imageEngine} onClose={() => setImageEngine(null)} />}
-    </>
+        <div className="border-t border-border pt-1.5">
+          <ToolsSubmenu
+            open={toolsOpen}
+            onOpenChange={setToolsOpen}
+            toolsets={toolsetsResult.toolsets}
+            loading={toolsetsResult.loading}
+            error={toolsetsResult.error}
+            maxHeight={menuMaxHeight}
+            onNavigateSettings={() => {
+              setOpen(false);
+              setToolsOpen(false);
+            }}
+          />
+        </div>
+      </ComposerMenu>
+    </div>
   );
 };
 

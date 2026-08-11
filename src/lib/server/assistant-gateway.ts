@@ -24,6 +24,27 @@ export function bearerAuthorization(request: Request): string | null {
   return token ? `Bearer ${token}` : null;
 }
 
+/**
+ * FastAPI's `detail` field is a plain string for a handler's own
+ * `HTTPException(detail=...)`, but for a raw 422 (automatic Pydantic
+ * request validation) it's an array of {loc, msg, type, ...} objects
+ * instead - confirmed live as the actual cause of a real dashboard crash
+ * (React error #31, "objects are not valid as a React child") when a
+ * proxy route forwarded that array straight through as `error` and a
+ * component rendered it as text. Every upstream-error proxy must run
+ * `detail` through this before putting it in a JSON response.
+ */
+export function describeUpstreamDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const messages = detail
+      .map((entry) => (entry && typeof entry === "object" && "msg" in entry ? String((entry as { msg?: unknown }).msg) : null))
+      .filter((msg): msg is string => Boolean(msg));
+    if (messages.length > 0) return messages.join("; ");
+  }
+  return fallback;
+}
+
 export function internalServiceHeaders(
   serviceName: string,
   secret: string | undefined,

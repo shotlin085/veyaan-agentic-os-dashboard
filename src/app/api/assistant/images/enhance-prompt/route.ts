@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { assistantGatewayUrl, bearerAuthorization } from "@/lib/server/assistant-gateway";
+import { assistantGatewayUrl, bearerAuthorization, describeUpstreamDetail } from "@/lib/server/assistant-gateway";
 
 export const dynamic = "force-dynamic";
 
@@ -34,9 +34,12 @@ export async function POST(request: Request) {
   ).catch(() => null);
 
   if (!upstream) return NextResponse.json({ error: "VEYAAN is not reachable." }, { status: 503 });
-  const data = (await upstream.json().catch(() => null)) as { enhanced_prompt?: string; detail?: string } | null;
+  const data = (await upstream.json().catch(() => null)) as { enhanced_prompt?: string; detail?: unknown } | null;
   if (!upstream.ok || !data) {
-    return NextResponse.json({ error: data?.detail ?? "Could not enhance that prompt." }, { status: upstream.status || 502 });
+    return NextResponse.json(
+      { error: describeUpstreamDetail(data?.detail, "Could not enhance that prompt.") },
+      { status: upstream.status || 502 },
+    );
   }
   return NextResponse.json(data);
 }
