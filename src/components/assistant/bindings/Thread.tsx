@@ -25,6 +25,7 @@ import {
   CopyIcon,
   DownloadIcon,
   EllipsisIcon,
+  ImageIcon,
   ListChecksIcon,
   PencilIcon,
   RefreshCwIcon,
@@ -80,6 +81,8 @@ import { useWorkspaceCollection } from "@/lib/workspace/useWorkspaceCollection";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
 import { useContextUsage } from "@/components/assistant/runtime/context-usage";
+import { ImageGenPanel } from "@/components/elements/image-gen-panel";
+import type { ImageEngine } from "@/components/assistant/runtime/image-generation";
 import { SLASH_COMMANDS, type SlashCommand } from "@/components/assistant/bindings/slash-commands";
 import type { HermesPlan, HermesRoute, HermesUsage } from "@/components/assistant/runtime/hermes-adapter";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -113,6 +116,16 @@ const TOOL_VERBS: Record<string, { active: string; done: string }> = {
   file_write: { active: "Writing a file", done: "Wrote a file" },
   code_execution: { active: "Running code", done: "Ran code" },
   image_gen: { active: "Generating an image", done: "Generated an image" },
+  // Real browsermcp tool names (Google Flow / ChatGPT Web image
+  // generation) - the composer's image quick-actions call these directly
+  // (see ImageGenPanel), but hermes-agent could in principle also call
+  // them mid-conversation on its own, since tool-progress events aren't
+  // allowlisted by name - these entries keep that path's labeling
+  // consistent too, not just the quick-action path.
+  flow_generate_image_async: { active: "Generating an image", done: "Generated an image" },
+  chatgpt_generate_image_async: { active: "Generating an image", done: "Generated an image" },
+  image_job_status: { active: "Checking image progress", done: "Checked image progress" },
+  image_job_result: { active: "Fetching the generated image", done: "Fetched the generated image" },
   memory: { active: "Checking memory", done: "Checked memory" },
   todo: { active: "Updating the plan", done: "Updated the plan" },
   // Real registered tool name is "delegate_task" (hermes-agent's
@@ -792,10 +805,16 @@ function toolsetStatus(toolset: { enabled: boolean; configured: boolean }): "hea
  * right now, amber means it's configured but turned off, gray/red means
  * no real credentials exist for it yet.
  */
+const IMAGE_QUICK_ACTIONS: { engine: ImageEngine; label: string }[] = [
+  { engine: "flow", label: "Create image — Nano Banana" },
+  { engine: "chatgpt", label: "Create image — ChatGPT" },
+];
+
 const PluginsButton: FC = () => {
   const { toolsets, loading, error } = useHermesToolsets();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [imageEngine, setImageEngine] = useState<ImageEngine | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -817,11 +836,27 @@ const PluginsButton: FC = () => {
   const healthyCount = toolsets.filter((t) => t.enabled).length;
 
   return (
-    <div ref={rootRef} className="relative">
-      <ComposerAttachButton onClick={() => setOpen((v) => !v)} title="Plugins & tools" aria-label="Plugins & tools" />
-      <ComposerMenu open={open} align="start" className="max-h-[28rem] w-80 overflow-y-auto">
-        <div className="flex items-center justify-between px-2.5 pb-1.5 pt-1">
-          <span className={cn(mono, "text-foreground/35")}>Plugins & tools</span>
+    <>
+      <div ref={rootRef} className="relative">
+        <ComposerAttachButton onClick={() => setOpen((v) => !v)} title="Plugins & tools" aria-label="Plugins & tools" />
+        <ComposerMenu open={open} align="start" className="max-h-[28rem] w-80 overflow-y-auto">
+          <div className="flex flex-col gap-0.5 pb-1.5">
+            {IMAGE_QUICK_ACTIONS.map((action) => (
+              <ComposerMenuItem
+                key={action.engine}
+                onClick={() => {
+                  setImageEngine(action.engine);
+                  setOpen(false);
+                }}
+              >
+                <ImageIcon className="size-3.5 shrink-0 text-foreground/45" />
+                <span className="flex-1 truncate text-start">{action.label}</span>
+              </ComposerMenuItem>
+            ))}
+          </div>
+          <div className="border-t border-border" />
+        <div className="flex items-center justify-between px-2.5 pb-1.5 pt-2">
+          <span className={cn(mono, "text-foreground/35")}>More tools</span>
           <span className={cn(mono, "text-foreground/35 tabular-nums")}>
             {loading ? "loading..." : `${healthyCount}/${toolsets.length} connected`}
           </span>
@@ -866,9 +901,11 @@ const PluginsButton: FC = () => {
         >
           <SettingsIcon className="size-3.5" />
           Manage in Settings
-        </Link>
-      </ComposerMenu>
-    </div>
+          </Link>
+        </ComposerMenu>
+      </div>
+      {imageEngine && <ImageGenPanel engine={imageEngine} onClose={() => setImageEngine(null)} />}
+    </>
   );
 };
 

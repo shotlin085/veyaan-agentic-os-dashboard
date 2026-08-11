@@ -31,7 +31,7 @@ function ActiveAgentBanner() {
  * [conversationId] segment rather than component state).
  */
 export default function ConversationPage() {
-  const { activeConversation, activeId, loading, conversations, refresh } = useConversations();
+  const { activeConversation, activeId, loading, conversations, refresh, messageReloadNonce } = useConversations();
   const notFound = !loading && conversations.length > 0 && !activeConversation;
 
   return (
@@ -56,7 +56,11 @@ export default function ConversationPage() {
       ) : (
         <ActiveAgentProvider agentDefinitionId={activeConversation.agent_definition_id}>
           <ActiveAgentBanner />
-          <HermesRuntimeProvider conversation={activeConversation} onTurnSettled={() => void refresh()}>
+          <HermesRuntimeProvider
+            key={`${activeConversation.id}-${messageReloadNonce}`}
+            conversation={activeConversation}
+            onTurnSettled={() => void refresh()}
+          >
             <Thread />
           </HermesRuntimeProvider>
         </ActiveAgentProvider>

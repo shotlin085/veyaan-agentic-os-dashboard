@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, type FC, type ReactNode } from "react";
+import { createContext, useContext, useState, type FC, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useHermesConversations, type HermesConversation } from "./hermes-conversations";
 
@@ -16,6 +16,15 @@ interface ConversationContextValue {
   setPinned: (id: string, pinned: boolean) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<boolean>;
+  /** Bumped after something writes real turns into the active
+   * conversation *outside* the normal streaming adapter (e.g. the image
+   * quick-actions - see ImageGenPanel) - assistant-ui's history adapter
+   * only ever calls its own `load()` once per runtime instance (see
+   * HermesRuntimeProvider's own comment), so the only way to make it
+   * refetch is to remount that whole runtime. /c/[conversationId]/page.tsx
+   * folds this into HermesRuntimeProvider's key for exactly that. */
+  messageReloadNonce: number;
+  bumpMessageReload: () => void;
 }
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
@@ -39,8 +48,11 @@ export const ConversationProvider: FC<{ children: ReactNode }> = ({ children }) 
   const hook = useHermesConversations();
   const activeId = params?.conversationId ?? null;
   const activeConversation = hook.conversations.find((c) => c.id === activeId) ?? null;
+  const [messageReloadNonce, setMessageReloadNonce] = useState(0);
 
   const value: ConversationContextValue = {
+    messageReloadNonce,
+    bumpMessageReload: () => setMessageReloadNonce((n) => n + 1),
     loading: hook.loading,
     error: hook.error,
     conversations: hook.conversations,

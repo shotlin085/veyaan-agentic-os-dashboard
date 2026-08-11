@@ -149,6 +149,22 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
+  // No image styling existed before this - a raw ![]() (e.g. the image
+  // quick-actions' generated result, see ImageGenPanel) would otherwise
+  // render as react-markdown's completely unstyled default <img>.
+  img: ({ className, alt, ...props }) => (
+    // Remote, dynamically-generated URLs (browsermcp output files) -
+    // next/image would need those hosts allowlisted for no real benefit here.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className={cn(
+        "aui-md-img my-3 max-w-full rounded-xl border border-border first:mt-0 last:mb-0",
+        className,
+      )}
+      alt={alt ?? ""}
+      {...props}
+    />
+  ),
   blockquote: ({ className, ...props }) => (
     <blockquote
       className={cn(
