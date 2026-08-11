@@ -52,7 +52,7 @@ export default function QACentrePage() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  return <div className="mx-auto max-w-6xl space-y-6 pb-12">
+  return <div className="mx-auto max-w-6xl space-y-6 p-6 pb-16">
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
       <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-status-success/20 bg-status-success/10 text-status-success"><ShieldCheck className="h-5 w-5" /></div><div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-status-success">VEYAAN / QUALITY</p><h1 className="mt-1 text-2xl font-semibold text-white">QA Centre</h1></div></div>
       {workspace && <Button variant="secondary" size="sm" onClick={() => void refresh()} disabled={loading}><RefreshCw className={loading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />Refresh</Button>}

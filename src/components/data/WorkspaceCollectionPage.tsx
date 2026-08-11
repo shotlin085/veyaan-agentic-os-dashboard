@@ -21,7 +21,7 @@ export function WorkspaceCollectionPage({ kind, title, description }: { kind: Co
   const isAgents = kind === "agent-definitions";
   const Icon = isProjects ? Briefcase : isAgents ? Users : Building2;
   const label = isProjects ? "projects" : isAgents ? "agent definitions" : "departments";
-  return <div className="mx-auto max-w-6xl space-y-6 pb-12">
+  return <div className="mx-auto max-w-6xl space-y-6 p-6 pb-16">
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
       <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-foreground/20 bg-foreground/10 text-foreground"><Icon className="h-5 w-5" /></div><div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground">VEYAAN / WORKSPACE</p><h1 className="mt-1 text-2xl font-semibold text-white">{title}</h1></div></div>
       {connected && <div className="flex items-center gap-2">{isAgents && <Link href="/agents/factory"><Button size="sm">Create agent</Button></Link>}<Button variant="secondary" size="sm" onClick={() => window.location.reload()} disabled={loading}><RefreshCw className={loading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />Refresh</Button></div>}

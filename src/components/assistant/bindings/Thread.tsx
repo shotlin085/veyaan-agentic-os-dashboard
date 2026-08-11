@@ -57,6 +57,7 @@ import {
   ComposerAttachButton,
   ComposerBar,
   ComposerCommandItem,
+  ComposerContext,
   ComposerMenu,
   ComposerMenuItem,
   ComposerModelTrigger,
@@ -78,8 +79,11 @@ import { useConversations } from "@/components/assistant/runtime/ConversationPro
 import { useWorkspaceCollection } from "@/lib/workspace/useWorkspaceCollection";
 import { ProviderLogo } from "@/components/assistant/provider-logos";
 import { computeTurnCost, formatInr, useUsdToInr } from "@/components/assistant/runtime/hermes-cost";
+import { useContextUsage } from "@/components/assistant/runtime/context-usage";
 import { SLASH_COMMANDS, type SlashCommand } from "@/components/assistant/bindings/slash-commands";
 import type { HermesPlan, HermesRoute, HermesUsage } from "@/components/assistant/runtime/hermes-adapter";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { useWorkspace } from "@/lib/workspace/WorkspaceProvider";
 
 const STARTER_PROMPTS = [
   "What can you help me with?",
@@ -748,6 +752,7 @@ const Composer: FC = () => {
             <PlanToggleButton />
             <ReasoningEffortButton />
             <SessionCostButton />
+            <ContextUsageButton />
             <DictationButton />
             <ComposerSendAction />
           </ComposerActions>
@@ -1119,6 +1124,59 @@ const SessionCostButton: FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+/**
+ * Real, pre-flight context-window usage for the composer - wires the
+ * ComposerContext element (elements/composer.tsx) to
+ * GET .../conversations/{id}/context-usage (app/conversations/
+ * streaming_routes.py) via useContextUsage, instead of leaving that
+ * element unrendered as dead code. Reflects what the *next* message would
+ * actually cost against the target model's context window, not a running
+ * session total (that's SessionCostButton, a separate concept).
+ *
+ * `tools` always renders as 0 today: no code path on the fast/direct-
+ * OpenRouter send path attaches a `tools=` field to the request
+ * (hermes-agent's own tool use is opaque to this service) - an honest
+ * reflection of what's actually sent, not a placeholder waiting to be
+ * filled in.
+ *
+ * Refetches (via useContextUsage's refreshKey) whenever a new turn lands
+ * (thread.messages.length changes) or the direct-model picker changes -
+ * both real signals that what the *next* send would look like has
+ * changed. Renders nothing until a real conversation/workspace/token
+ * triple exists and the backend has returned a usage figure.
+ */
+const ContextUsageButton: FC = () => {
+  const { session } = useAuth();
+  const { workspace } = useWorkspace();
+  const { activeConversation } = useConversations();
+  const runConfigCustom = useAuiState((s) => s.composer.runConfig.custom);
+  const directModel = typeof runConfigCustom?.directModel === "string" ? runConfigCustom.directModel : undefined;
+  const messageCount = useAuiState((s) => s.thread.messages.length);
+
+  const usage = useContextUsage(
+    {
+      workspaceId: workspace?.id ?? "",
+      conversationId: activeConversation?.id ?? "",
+      token: session?.access_token ?? "",
+      model: directModel,
+    },
+    messageCount,
+  );
+
+  if (!usage || usage.total <= 0) return null;
+
+  return (
+    <ComposerContext
+      usage={{
+        system: Math.round(usage.system / 1000),
+        tools: Math.round(usage.tools / 1000),
+        messages: Math.round(usage.messages / 1000),
+        total: Math.round(usage.total / 1000),
+      }}
+    />
   );
 };
 

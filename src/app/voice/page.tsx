@@ -145,7 +145,7 @@ export default function VoicePage() {
   useEffect(() => () => { void disconnect(); }, [disconnect]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 p-6 pb-16">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-foreground">VEYAAN / LIVE VOICE</p>
