@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   }).catch(() => null);
 
   if (!upstream) {
-    return NextResponse.json({ error: "Hermes Orchestrator is not reachable." }, { status: 503 });
+    return NextResponse.json({ error: "VEYAAN is not reachable." }, { status: 503 });
   }
 
   const data = (await upstream.json().catch(() => null)) as

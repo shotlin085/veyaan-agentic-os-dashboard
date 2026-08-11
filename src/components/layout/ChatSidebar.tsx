@@ -257,9 +257,15 @@ function SidebarBody({
 }: SidebarBodyProps) {
   return (
     <>
-      <div className={cn("flex items-center gap-2.5 border-b border-border p-3", collapsed && "justify-center px-2")}>
-        <Image src="/veyaan-logo.png" alt="" width={36} height={36} className="size-9 shrink-0 rounded-lg" />
-        {!collapsed && <span className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-wide text-foreground">VEYAAN</span>}
+      <div className={cn("flex items-center gap-3 border-b border-border p-3", collapsed && "justify-center px-2")}>
+        <Image
+          src="/veyaan-logo.png"
+          alt=""
+          width={56}
+          height={56}
+          className={cn("shrink-0 rounded-xl", collapsed ? "size-9" : "size-14")}
+        />
+        {!collapsed && <span className="min-w-0 flex-1 truncate text-[19px] font-bold tracking-wide text-foreground">VEYAAN</span>}
         {showCollapseToggle && (
           <button
             type="button"

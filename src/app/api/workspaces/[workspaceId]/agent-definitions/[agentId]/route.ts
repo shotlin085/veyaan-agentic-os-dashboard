@@ -14,7 +14,7 @@ export async function GET(request: Request, { params }: { params: { workspaceId:
     const body = await response.text();
     return new NextResponse(body, { status: response.status, headers: { "content-type": response.headers.get("content-type") ?? "application/json" } });
   } catch {
-    return NextResponse.json({ error: "Hermes agent API is unreachable." }, { status: 503 });
+    return NextResponse.json({ error: "VEYAAN agent API is unreachable." }, { status: 503 });
   }
 }
 
@@ -41,6 +41,6 @@ export async function PATCH(request: Request, { params }: { params: { workspaceI
     const text = await response.text();
     return new NextResponse(text, { status: response.status, headers: { "content-type": response.headers.get("content-type") ?? "application/json" } });
   } catch {
-    return NextResponse.json({ error: "Hermes agent API is unreachable." }, { status: 503 });
+    return NextResponse.json({ error: "VEYAAN agent API is unreachable." }, { status: 503 });
   }
 }

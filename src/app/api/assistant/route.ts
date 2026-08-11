@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     signal: AbortSignal.any([request.signal, AbortSignal.timeout(body.plan ? 600_000 : 120_000)]),
   }).catch(() => null);
 
-  if (!upstream) return NextResponse.json({ error: "Hermes Orchestrator is not reachable." }, { status: 503 });
+  if (!upstream) return NextResponse.json({ error: "VEYAAN is not reachable." }, { status: 503 });
   if (!upstream.ok || !upstream.body) {
     const detail = await upstream.text().catch(() => "Assistant request failed");
     return new NextResponse(detail || "Assistant request failed", { status: upstream.status, headers: { "content-type": "application/json" } });

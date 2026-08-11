@@ -200,7 +200,7 @@ export default function VoicePage() {
           <CardContent className="space-y-3">
             {error && <div className="rounded-xl border border-status-danger/30 bg-status-danger/10 p-3 text-sm text-status-danger"><MicOff className="mb-1 h-4 w-4" />{error}</div>}
             {events.length === 0 ? <div className="rounded-xl border border-dashed border-border p-5 text-sm leading-6 text-muted-foreground">No events yet. Tap Talk to VEYAAN to see state, captions, research, and audio events.</div> : events.map((event, index) => <div key={`${event.sequence ?? "event"}-${index}`} className="rounded-xl border border-border bg-muted p-3"><div className="flex items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground"><span>{event.type === "caption" ? `caption · ${event.speaker ?? "?"}` : event.type ?? "event"}</span><span>{event.sequence ? `#${event.sequence}` : ""}</span></div><p className="mt-1 text-sm text-muted-foreground">{event.message ?? event.text ?? event.activity ?? "Received"}</p></div>)}
-            <div className="rounded-xl border border-muted-foreground/20 bg-muted-foreground/5 p-3 text-xs leading-5 text-muted-foreground"><Search className="mr-1 inline h-3 w-3 text-muted-foreground" />Current web research remains capability-gated by Hermes. The voice worker reports research availability truthfully.</div>
+            <div className="rounded-xl border border-muted-foreground/20 bg-muted-foreground/5 p-3 text-xs leading-5 text-muted-foreground"><Search className="mr-1 inline h-3 w-3 text-muted-foreground" />Current web research remains capability-gated by VEYAAN. The voice worker reports research availability truthfully.</div>
           </CardContent>
         </Card>
       </div>

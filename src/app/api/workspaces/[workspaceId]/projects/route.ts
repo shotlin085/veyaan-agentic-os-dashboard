@@ -11,6 +11,6 @@ export async function GET(request: Request, { params }: { params: { workspaceId:
     const body = await response.text();
     return new NextResponse(body, { status: response.status, headers: { "content-type": response.headers.get("content-type") ?? "application/json" } });
   } catch {
-    return NextResponse.json({ error: "Hermes project API is unreachable." }, { status: 503 });
+    return NextResponse.json({ error: "VEYAAN project API is unreachable." }, { status: 503 });
   }
 }

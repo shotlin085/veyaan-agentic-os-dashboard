@@ -148,7 +148,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
       {activeTab === "requirements" && (
         <div className="p-5 rounded-2xl bg-popover border border-border space-y-4">
-          <h2 className="text-sm font-bold text-white">Structured Requirement Brief (Verified by Hermes)</h2>
+          <h2 className="text-sm font-bold text-white">Structured Requirement Brief (Verified by VEYAAN)</h2>
           <div className="p-4 rounded-xl bg-background border border-border font-mono text-xs space-y-3 text-muted-foreground">
             <div><strong>Project Code:</strong> {project.code}</div>
             <div><strong>Objective:</strong> {project.description}</div>

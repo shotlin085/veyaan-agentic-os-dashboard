@@ -125,7 +125,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
 
       if (!config.workspaceId || !config.conversationId || !config.token) {
         yield {
-          content: [{ type: "text", text: "Sign in and select a workspace to start a real Hermes conversation." }],
+          content: [{ type: "text", text: "Sign in and select a workspace to start a real VEYAAN conversation." }],
           status: { type: "complete", reason: "stop" },
         };
         return;
@@ -158,7 +158,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
       if (!response.ok || !response.body) {
         const detail = await response.text().catch(() => "");
         yield {
-          content: [{ type: "text", text: detail || "Hermes request failed." }],
+          content: [{ type: "text", text: detail || "VEYAAN request failed." }],
           status: { type: "incomplete", reason: "error" },
         };
         return;
@@ -244,7 +244,7 @@ export function createHermesAdapter(config: HermesAdapterConfig): ChatModelAdapt
                 finished = true;
                 break;
               case "runtime.failed":
-                accumulated = parsed.error ?? "Hermes runtime failed.";
+                accumulated = parsed.error ?? "VEYAAN runtime failed.";
                 finished = true;
                 errored = true;
                 break;

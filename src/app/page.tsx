@@ -27,7 +27,7 @@ export default function ChatHomePage() {
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 px-6 text-center">
       <LockKeyhole className="size-6 text-foreground/30" />
-      <p className="text-sm text-foreground/55">{loading ? "Starting a conversation..." : "Sign in and select a workspace to start a real Hermes conversation."}</p>
+      <p className="text-sm text-foreground/55">{loading ? "Starting a conversation..." : "Sign in and select a workspace to start a real VEYAAN conversation."}</p>
     </div>
   );
 }

@@ -62,8 +62,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             >
               <Menu className="size-4" />
             </button>
-            <Image src="/veyaan-logo.png" alt="" width={28} height={28} className="size-7 shrink-0 rounded-lg" />
-            <span className="truncate text-[14px] font-semibold tracking-wide text-foreground">VEYAAN</span>
+            <Image src="/veyaan-logo.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" />
+            <span className="truncate text-[16px] font-bold tracking-wide text-foreground">VEYAAN</span>
           </div>
           <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
         </div>

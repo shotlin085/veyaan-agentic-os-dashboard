@@ -89,9 +89,9 @@ export default function SettingsPage() {
 
           <section className="flex flex-col gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-foreground">Hermes toolsets</h2>
+              <h2 className="text-sm font-semibold text-foreground">VEYAAN toolsets</h2>
               <p className="mt-1 max-w-2xl text-[13px] leading-6 text-foreground/55">
-                The real toolsets Hermes has available in this workspace, and whether each is
+                The real toolsets VEYAAN has available in this workspace, and whether each is
                 actually enabled and configured on the runtime - not a fixture, and not editable
                 from here yet.
               </p>
@@ -398,6 +398,7 @@ function McpServersSection() {
   const [name, setName] = useState("");
   const [mode, setMode] = useState<"url" | "command">("url");
   const [url, setUrl] = useState("");
+  const [bearerToken, setBearerToken] = useState("");
   const [command, setCommand] = useState("npx");
   const [args, setArgs] = useState("-y mcp-remote@latest https://example.com/mcp");
   const [submitting, setSubmitting] = useState(false);
@@ -425,7 +426,7 @@ function McpServersSection() {
     setFormError(null);
     const result = await addServer(
       mode === "url"
-        ? { name: trimmedName, url: url.trim() }
+        ? { name: trimmedName, url: url.trim(), bearer_token: bearerToken.trim() || undefined }
         : { name: trimmedName, command: command.trim(), args: args.trim().split(/\s+/).filter(Boolean) },
     );
     setSubmitting(false);
@@ -435,6 +436,7 @@ function McpServersSection() {
     }
     setName("");
     setUrl("");
+    setBearerToken("");
     setFormOpen(false);
   };
 
@@ -509,7 +511,7 @@ function McpServersSection() {
           <p className="mt-1 max-w-2xl text-[13px] leading-6 text-foreground/55">
             Connect any MCP server - paste its URL, or a stdio command for ones that need it (e.g. an{" "}
             <code className={mono}>npx mcp-remote</code> bridge) - real, generic, not limited to the four connectors
-            above. Shared across this whole Hermes instance, not per-workspace. Changes here only affect real
+            above. Shared across this whole VEYAAN instance, not per-workspace. Changes here only affect real
             conversations after a gateway restart - use the button below once you&apos;re done adding/removing.
           </p>
         </div>
@@ -568,18 +570,31 @@ function McpServersSection() {
             </button>
           </div>
           {mode === "url" ? (
-            <label className="flex flex-col gap-1.5">
-              <span className={cn(mono, "text-foreground/40")}>Server URL</span>
-              <input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://mcp.example.com/mcp"
-                className={cn(field, "rounded-xl px-3 py-2 text-[13.5px] outline-none")}
-              />
-              <span className={cn(mono, "text-foreground/35")}>
-                If it needs a login, you&apos;ll get a real Authorize button after adding it.
-              </span>
-            </label>
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className={cn(mono, "text-foreground/40")}>Server URL</span>
+                <input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://mcp.example.com/mcp"
+                  className={cn(field, "rounded-xl px-3 py-2 text-[13.5px] outline-none")}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className={cn(mono, "text-foreground/40")}>Bearer token / API key (optional)</span>
+                <input
+                  value={bearerToken}
+                  onChange={(e) => setBearerToken(e.target.value)}
+                  type="password"
+                  placeholder="Only if this server uses a static token, not OAuth"
+                  className={cn(field, "rounded-xl px-3 py-2 text-[13.5px] outline-none")}
+                />
+                <span className={cn(mono, "text-foreground/35")}>
+                  Stored server-side only, sent as this server&apos;s Authorization header. Leave blank if it
+                  needs a login instead - you&apos;ll get a real Authorize button after adding it.
+                </span>
+              </label>
+            </>
           ) : (
             <>
               <label className="flex flex-col gap-1.5">
@@ -757,7 +772,7 @@ function AutoModeSection() {
         <h2 className="text-sm font-semibold text-foreground">Auto mode</h2>
         <p className="mt-1 max-w-2xl text-[13px] leading-6 text-foreground/55">
           What the composer&apos;s &quot;Auto&quot; option actually runs. By default it&apos;s a
-          free fast reply that escalates to Hermes&apos;s research agent when needed - restrict it
+          free fast reply that escalates to VEYAAN&apos;s research agent when needed - restrict it
           to one specific model here if you want every message to predictably cost the same
           (or nothing), instead of occasionally escalating.
         </p>
@@ -772,7 +787,7 @@ function AutoModeSection() {
         >
           <option value="">Automatic (default)</option>
           {catalogModels.length > 0 && (
-            <optgroup label="Hermes catalog">
+            <optgroup label="VEYAAN catalog">
               {catalogModels.map((model) => (
                 <option key={model.id} value={`hermes:${model.id}`}>
                   {model.name} {model.free ? "(free)" : `(${model.inputPrice}/M in)`}

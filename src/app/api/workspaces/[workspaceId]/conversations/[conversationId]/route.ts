@@ -21,7 +21,7 @@ export async function PATCH(request: Request, { params }: { params: { workspaceI
     const text = await response.text();
     return new NextResponse(text, { status: response.status, headers: { "content-type": response.headers.get("content-type") ?? "application/json" } });
   } catch {
-    return NextResponse.json({ error: "Hermes conversation API is unreachable." }, { status: 503 });
+    return NextResponse.json({ error: "VEYAAN conversation API is unreachable." }, { status: 503 });
   }
 }
 
@@ -37,6 +37,6 @@ export async function DELETE(request: Request, { params }: { params: { workspace
     const text = await response.text();
     return new NextResponse(text, { status: response.status, headers: { "content-type": response.headers.get("content-type") ?? "application/json" } });
   } catch {
-    return NextResponse.json({ error: "Hermes conversation API is unreachable." }, { status: 503 });
+    return NextResponse.json({ error: "VEYAAN conversation API is unreachable." }, { status: 503 });
   }
 }

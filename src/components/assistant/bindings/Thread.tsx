@@ -89,7 +89,7 @@ const STARTER_PROMPTS = [
   "What can you help me with?",
   "Summarize this workspace's active projects",
   "What agents are available here?",
-  "What can Hermes actually do right now?",
+  "What can VEYAAN actually do right now?",
 ];
 
 /**

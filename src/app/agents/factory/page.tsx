@@ -118,7 +118,7 @@ export default function AgentFactoryPage() {
           Create an agent
         </h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          Real agent definitions, persisted in Hermes — not a preview. Submitting creates an actual record you&apos;ll see on the Agents page.
+          Real agent definitions, persisted in VEYAAN — not a preview. Submitting creates an actual record you&apos;ll see on the Agents page.
         </p>
       </div>
 

@@ -68,7 +68,7 @@ export function useHermesMcpServers() {
   }, [refresh]);
 
   const addServer = useCallback(
-    async (input: { name: string; url?: string; command?: string; args?: string[] }): Promise<Result> => {
+    async (input: { name: string; url?: string; command?: string; args?: string[]; bearer_token?: string }): Promise<Result> => {
       if (!token || !workspaceId) return { ok: false, error: "Sign in and select a workspace first." };
       try {
         const response = await fetch(`/api/workspaces/${workspaceId}/hermes/mcp-servers`, {

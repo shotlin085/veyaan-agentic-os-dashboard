@@ -6,7 +6,7 @@ import { WorkspaceProvider } from "@/lib/workspace/WorkspaceProvider";
 
 export const metadata: Metadata = {
   title: "VEYAAN Agentic OS — Human Control Plane",
-  description: "Private internal operating system for controlling Hermes, departments, agents, projects, workflows, memory, approvals, sandboxes, and observability.",
+  description: "Private internal operating system for controlling VEYAAN, departments, agents, projects, workflows, memory, approvals, sandboxes, and observability.",
 };
 
 export default function RootLayout({
